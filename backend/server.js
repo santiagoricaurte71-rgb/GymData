@@ -3,11 +3,12 @@
 
 // ==========================================
 // GYMDATA - SERVIDOR PRINCIPAL
-// NODE.JS + EXPRESS + MYSQL
+// NODE.JS + EXPRESS + MYSQL + SEGURIDAD
 // ==========================================
 
 const express = require("express");
 const path = require("path");
+const session = require("express-session");
 
 // ==========================================
 // VARIABLES DE ENTORNO
@@ -18,7 +19,7 @@ require("dotenv").config({
 });
 
 // ==========================================
-// CONEXION MYSQL
+// MYSQL
 // ==========================================
 
 const { pool, probarConexion } = require(
@@ -26,30 +27,37 @@ const { pool, probarConexion } = require(
 );
 
 // ==========================================
-// IMPORTAR RUTAS
+// AUTENTICACION
 // ==========================================
 
-// Clientes
+const {
+    limitarIntentos,
+    iniciarSesion,
+    comprobarSesion,
+    cerrarSesion,
+    requiereAutenticacion
+} = require("./src/auth/auth");
+
+// ==========================================
+// RUTAS DE GYMDATA
+// ==========================================
+
 const clientesRoutes = require(
     "./src/routes/clientes.routes"
 );
 
-// Membresias
 const membresiasRoutes = require(
     "./src/routes/membresias.routes"
 );
 
-// Ejercicios
 const ejerciciosRoutes = require(
     "./src/routes/ejercicios.routes"
 );
 
-// Rutinas
 const rutinasRoutes = require(
     "./src/routes/rutinas.routes"
 );
 
-// Sesiones de entrenamiento
 const sesionesRoutes = require(
     "./src/routes/sesiones.routes"
 );
@@ -64,6 +72,46 @@ const PORT = Number(process.env.PORT || 3000);
 
 const FRONTEND = path.resolve(__dirname, "..");
 
+const ES_PRODUCCION =
+    process.env.NODE_ENV === "production";
+
+// ==========================================
+// VERIFICAR CONFIGURACION
+// ==========================================
+
+if (
+    !process.env.SESSION_SECRET ||
+    process.env.SESSION_SECRET.length < 32
+) {
+    console.error(
+        "ERROR: SESSION_SECRET no esta configurado."
+    );
+
+    process.exit(1);
+}
+
+if (
+    !process.env.ADMIN_USER ||
+    !process.env.ADMIN_PASSWORD_HASH
+) {
+    console.error(
+        "ERROR: Administrador no configurado."
+    );
+
+    process.exit(1);
+}
+
+// El almacenamiento temporal de express-session
+// solo se permite durante el desarrollo local.
+if (ES_PRODUCCION) {
+    console.error(
+        "ERROR: Antes de publicar GymData, " +
+        "configura sesiones persistentes y HTTPS."
+    );
+
+    process.exit(1);
+}
+
 // ==========================================
 // CONFIGURACION GENERAL
 // ==========================================
@@ -75,21 +123,88 @@ app.use(express.json({
 }));
 
 // ==========================================
-// API DE GYMDATA
+// SESIONES ADMINISTRATIVAS
 // ==========================================
 
-app.use("/api/clientes", clientesRoutes);
+app.use(session({
+    name: "gymdata.sid",
 
-app.use("/api/membresias", membresiasRoutes);
+    secret: process.env.SESSION_SECRET,
 
-app.use("/api/ejercicios", ejerciciosRoutes);
+    resave: false,
 
-app.use("/api/rutinas", rutinasRoutes);
+    saveUninitialized: false,
 
-app.use("/api/sesiones", sesionesRoutes);
+    rolling: true,
+
+    cookie: {
+        httpOnly: true,
+        secure: false,
+        sameSite: "strict",
+        maxAge: 8 * 60 * 60 * 1000
+    }
+}));
 
 // ==========================================
-// VERIFICAR ESTADO DEL SERVIDOR
+// RUTAS DE AUTENTICACION
+// ==========================================
+
+// Iniciar sesion
+app.post(
+    "/api/auth/login",
+    limitarIntentos,
+    iniciarSesion
+);
+
+// Consultar sesion
+app.get(
+    "/api/auth/session",
+    comprobarSesion
+);
+
+// Cerrar sesion
+app.post(
+    "/api/auth/logout",
+    requiereAutenticacion,
+    cerrarSesion
+);
+
+// ==========================================
+// PROTEGER TODAS LAS API DE GYMDATA
+// ==========================================
+
+app.use(
+    "/api/clientes",
+    requiereAutenticacion,
+    clientesRoutes
+);
+
+app.use(
+    "/api/membresias",
+    requiereAutenticacion,
+    membresiasRoutes
+);
+
+app.use(
+    "/api/ejercicios",
+    requiereAutenticacion,
+    ejerciciosRoutes
+);
+
+app.use(
+    "/api/rutinas",
+    requiereAutenticacion,
+    rutinasRoutes
+);
+
+app.use(
+    "/api/sesiones",
+    requiereAutenticacion,
+    sesionesRoutes
+);
+
+// ==========================================
+// COMPROBAR ESTADO DEL SERVIDOR
 // ==========================================
 
 app.get("/api/health", async (req, res) => {
@@ -118,7 +233,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 // ==========================================
-// RUTAS API NO ENCONTRADAS
+// API NO ENCONTRADA
 // ==========================================
 
 app.use("/api", (req, res) => {
@@ -131,9 +246,6 @@ app.use("/api", (req, res) => {
 // ==========================================
 // ARCHIVOS DEL FRONTEND
 // ==========================================
-
-// Servir solo los archivos publicos.
-// Nunca exponer backend ni .env.
 
 app.use(
     "/css",
@@ -217,22 +329,21 @@ async function iniciarServidor() {
     }
 
     app.listen(PORT, "127.0.0.1", () => {
-
         console.log("================================");
-        console.log("            GYMDATA");
+        console.log("             GYMDATA");
         console.log("================================");
 
         console.log("MySQL: Conectado");
+        console.log("Autenticacion: Activada");
+        console.log("API: Protegidas");
 
         console.log(
             `Pagina: http://localhost:${PORT}/`
         );
 
-        console.log("API Clientes: /api/clientes");
-        console.log("API Membresias: /api/membresias");
-        console.log("API Ejercicios: /api/ejercicios");
-        console.log("API Rutinas: /api/rutinas");
-        console.log("API Sesiones: /api/sesiones");
+        console.log("Login: /api/auth/login");
+        console.log("Sesion: /api/auth/session");
+        console.log("Logout: /api/auth/logout");
 
         console.log("================================");
     });
