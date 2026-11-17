@@ -1,0 +1,758 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>GymData | Gestión Deportiva</title>
+
+    <link rel="preconnect"
+          href="https://fonts.googleapis.com">
+    <link rel="preconnect"
+          href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<div class="contenedor-principal">
+
+    <!-- MENU LATERAL -->
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icono">G.</div>
+            <div>
+                <h1>GYM<span>DATA</span></h1>
+                <small>GESTIÓN DEPORTIVA</small>
+            </div>
+        </div>
+
+        <p class="menu-titulo">MENÚ PRINCIPAL</p>
+
+        <nav class="menu">
+            <a href="#inicio">⌂ Inicio</a>
+            <a href="#clientes">♙ Clientes</a>
+            <a href="#membresias">▣ Membresías</a>
+            <a href="#ejercicios">◆ Ejercicios</a>
+            <a href="#rutinas">▤ Rutinas</a>
+            <a href="#seguimiento">✓ Seguimiento</a>
+            <a href="#estadisticas">▥ Estadísticas</a>
+        </nav>
+
+        <div class="sidebar-pie">
+            <span class="punto-activo"></span>
+            SISTEMA LOCAL
+            <small>GymData - Versión de desarrollo</small>
+        </div>
+    </aside>
+
+    <main class="contenido">
+
+        <!-- ENCABEZADO -->
+        <header class="barra-superior">
+            <div>
+                <span class="etiqueta-superior">
+                    PANEL DE CONTROL
+                </span>
+                <h1>Bienvenido a <em>GymData</em></h1>
+            </div>
+            <span class="estado-local">● Modo local</span>
+        </header>
+
+        <!-- INICIO -->
+        <section id="inicio">
+
+            <div class="hero">
+                <div class="hero-contenido">
+                    <span class="hero-tag">
+                        TU GIMNASIO. TU CONTROL.
+                    </span>
+                    <h2>
+                        ENTRENA FUERTE.<br>
+                        <span>GESTIONA MEJOR.</span>
+                    </h2>
+                    <p>
+                        Administra clientes, membresías,
+                        ejercicios, rutinas y seguimiento
+                        deportivo desde un solo lugar.
+                    </p>
+                    <a href="#clientes" class="boton-hero">
+                        GESTIONAR CLIENTES →
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid-resumen">
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">♙</div>
+                    <p>CLIENTES REGISTRADOS</p>
+                    <strong id="totalClientes">0</strong>
+                    <small>Base de clientes</small>
+                </article>
+
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">✓</div>
+                    <p>MEMBRESÍAS ACTIVAS</p>
+                    <strong id="membresiasActivas">0</strong>
+                    <small>Planes vigentes</small>
+                </article>
+
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">◷</div>
+                    <p>MEMBRESÍAS VENCIDAS</p>
+                    <strong id="membresiasVencidas">0</strong>
+                    <small>Requieren seguimiento</small>
+                </article>
+
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">◆</div>
+                    <p>EJERCICIOS REGISTRADOS</p>
+                    <strong id="totalEjercicios">0</strong>
+                    <small>Biblioteca deportiva</small>
+                </article>
+
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">▤</div>
+                    <p>RUTINAS REGISTRADAS</p>
+                    <strong id="totalRutinas">0</strong>
+                    <small>Planes de entrenamiento</small>
+                </article>
+
+                <article class="tarjeta-resumen">
+                    <div class="resumen-icono">🏋</div>
+                    <p>SESIONES REALIZADAS</p>
+                    <strong id="totalSesiones">0</strong>
+                    <small>Historial de entrenamientos</small>
+                </article>
+            </div>
+        </section>
+
+        <!-- CLIENTES -->
+        <section id="clientes" class="seccion">
+
+            <span class="kicker">ADMINISTRACIÓN</span>
+            <h2>GESTIÓN DE <span>CLIENTES</span></h2>
+
+            <p class="descripcion">
+                Registra y administra los clientes de tu gimnasio.
+            </p>
+
+            <form id="formularioCliente" class="formulario">
+
+                <div class="grupo-formulario">
+                    <label for="nombreCliente">Nombre completo</label>
+                    <input type="text" id="nombreCliente"
+                           placeholder="Nombre del cliente"
+                           required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="documentoCliente">
+                        Número de documento
+                    </label>
+                    <input type="text" id="documentoCliente"
+                           placeholder="Número de identificación"
+                           required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="telefonoCliente">Teléfono</label>
+                    <input type="tel" id="telefonoCliente"
+                           placeholder="Número de contacto"
+                           required>
+                </div>
+
+                <button type="submit">
+                    + REGISTRAR CLIENTE
+                </button>
+            </form>
+
+            <div class="encabezado-lista">
+                <h3>Clientes registrados</h3>
+                <span id="cantidadClientes">0 clientes</span>
+            </div>
+
+            <div id="listaClientes" class="grid-listado">
+                <p class="mensaje-vacio">
+                    No hay clientes registrados todavía.
+                </p>
+            </div>
+        </section>
+
+        <!-- MEMBRESIAS -->
+        <section id="membresias" class="seccion">
+
+            <span class="kicker">PLANES Y VIGENCIA</span>
+            <h2>GESTIÓN DE <span>MEMBRESÍAS</span></h2>
+
+            <p class="descripcion">
+                Controla los planes y vencimientos de tus clientes.
+            </p>
+
+            <form id="formularioMembresia" class="formulario">
+
+                <div class="grupo-formulario">
+                    <label for="clienteMembresia">
+                        Seleccionar cliente
+                    </label>
+                    <select id="clienteMembresia" required>
+                        <option value="">
+                            Selecciona un cliente
+                        </option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="planMembresia">Tipo de plan</label>
+                    <select id="planMembresia" required>
+                        <option value="">Selecciona un plan</option>
+                        <option value="Mensual">
+                            Mensual - 30 días
+                        </option>
+                        <option value="Trimestral">
+                            Trimestral - 90 días
+                        </option>
+                        <option value="Semestral">
+                            Semestral - 180 días
+                        </option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="fechaInicio">Fecha de inicio</label>
+                    <input type="date" id="fechaInicio" required>
+                </div>
+
+                <button type="submit">
+                    + REGISTRAR MEMBRESÍA
+                </button>
+            </form>
+
+            <div class="encabezado-lista">
+                <h3>Membresías registradas</h3>
+                <span id="cantidadMembresias">
+                    0 membresías
+                </span>
+            </div>
+
+            <div id="listaMembresias" class="grid-listado">
+                <p class="mensaje-vacio">
+                    No hay membresías registradas todavía.
+                </p>
+            </div>
+        </section>
+
+        <!-- EJERCICIOS -->
+        <section id="ejercicios" class="seccion">
+
+            <span class="kicker">ENTRENAMIENTO</span>
+            <h2>BIBLIOTECA DE <span>EJERCICIOS</span></h2>
+
+            <p class="descripcion">
+                Registra ejercicios y utilízalos en tus rutinas.
+            </p>
+
+            <div class="modulo-banner banner-ejercicios">
+                <div>
+                    <span class="hero-tag">GYMDATA FITNESS</span>
+                    <h3>ENTRENA CON PROPÓSITO</h3>
+                    <p>Construye tu propia biblioteca deportiva.</p>
+                </div>
+            </div>
+
+            <form id="formularioEjercicio"
+                  class="formulario formulario-ejercicios">
+
+                <input type="hidden" id="ejercicioId">
+
+                <div class="grupo-formulario">
+                    <label for="nombreEjercicio">
+                        Nombre del ejercicio
+                    </label>
+                    <input type="text" id="nombreEjercicio"
+                           maxlength="100"
+                           placeholder="Ej. Press de banca"
+                           required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="grupoMuscular">Grupo muscular</label>
+                    <select id="grupoMuscular" required>
+                        <option value="">Selecciona un grupo</option>
+                        <option>Pecho</option>
+                        <option>Espalda</option>
+                        <option>Hombros</option>
+                        <option>Bíceps</option>
+                        <option>Tríceps</option>
+                        <option>Cuádriceps</option>
+                        <option>Femoral</option>
+                        <option>Glúteos</option>
+                        <option>Pantorrillas</option>
+                        <option>Abdomen</option>
+                        <option>Cuerpo completo</option>
+                        <option>Cardio</option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="seriesEjercicio">Series</label>
+                    <input type="number" id="seriesEjercicio"
+                           min="1" max="30" value="3" required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="repeticionesEjercicio">
+                        Repeticiones
+                    </label>
+                    <input type="number" id="repeticionesEjercicio"
+                           min="1" max="200" value="12" required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="descansoEjercicio">
+                        Descanso (segundos)
+                    </label>
+                    <input type="number" id="descansoEjercicio"
+                           min="0" max="1800" value="60" required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="imagenEjercicio">
+                        URL de imagen (opcional)
+                    </label>
+                    <input type="url" id="imagenEjercicio"
+                           placeholder="https://ejemplo.com/foto.jpg">
+                </div>
+
+                <div class="grupo-formulario campo-completo">
+                    <label for="descripcionEjercicio">
+                        Indicaciones
+                    </label>
+                    <textarea id="descripcionEjercicio"
+                              rows="3" maxlength="500"
+                              placeholder="Cómo realizar el ejercicio"></textarea>
+                </div>
+
+                <div class="acciones-formulario">
+                    <button type="submit"
+                            id="botonGuardarEjercicio">
+                        + GUARDAR EJERCICIO
+                    </button>
+
+                    <button type="button"
+                            id="cancelarEdicionEjercicio"
+                            class="boton-secundario oculto">
+                        CANCELAR EDICIÓN
+                    </button>
+                </div>
+            </form>
+
+            <div class="encabezado-lista">
+                <h3>Ejercicios registrados</h3>
+                <span id="cantidadEjercicios">0 ejercicios</span>
+            </div>
+
+            <div class="filtros-ejercicios">
+                <input type="search" id="buscarEjercicio"
+                       placeholder="Buscar ejercicio...">
+
+                <select id="filtrarGrupoMuscular">
+                    <option value="">
+                        Todos los grupos musculares
+                    </option>
+                    <option>Pecho</option>
+                    <option>Espalda</option>
+                    <option>Hombros</option>
+                    <option>Bíceps</option>
+                    <option>Tríceps</option>
+                    <option>Cuádriceps</option>
+                    <option>Femoral</option>
+                    <option>Glúteos</option>
+                    <option>Pantorrillas</option>
+                    <option>Abdomen</option>
+                    <option>Cuerpo completo</option>
+                    <option>Cardio</option>
+                </select>
+            </div>
+
+            <div id="listaEjercicios" class="grid-listado">
+                <p class="mensaje-vacio">
+                    Todavía no hay ejercicios registrados.
+                </p>
+            </div>
+        </section>
+
+        <!-- RUTINAS -->
+        <section id="rutinas" class="seccion">
+
+            <span class="kicker">PLANIFICACIÓN DEPORTIVA</span>
+            <h2>PLANES DE <span>ENTRENAMIENTO</span></h2>
+
+            <p class="descripcion">
+                Crea rutinas por día y asígnalas a clientes.
+            </p>
+
+            <div class="modulo-banner banner-rutinas">
+                <div>
+                    <span class="hero-tag">GYMDATA TRAINING</span>
+                    <h3>CADA REPETICIÓN CUENTA</h3>
+                    <p>Diseña entrenamientos personalizados.</p>
+                </div>
+            </div>
+
+            <form id="formularioRutina"
+                  class="formulario formulario-rutinas">
+
+                <div class="grupo-formulario">
+                    <label for="nombreRutina">
+                        Nombre de la rutina
+                    </label>
+                    <input type="text" id="nombreRutina"
+                           maxlength="100"
+                           placeholder="Ej. Tren superior"
+                           required>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="clienteRutina">
+                        Asignar a cliente
+                    </label>
+                    <select id="clienteRutina" required>
+                        <option value="">
+                            Selecciona un cliente
+                        </option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="diaRutina">
+                        Día de entrenamiento
+                    </label>
+                    <select id="diaRutina" required>
+                        <option value="">Selecciona un día</option>
+                        <option>Lunes</option>
+                        <option>Martes</option>
+                        <option>Miércoles</option>
+                        <option>Jueves</option>
+                        <option>Viernes</option>
+                        <option>Sábado</option>
+                        <option>Domingo</option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="objetivoRutina">Objetivo</label>
+                    <select id="objetivoRutina" required>
+                        <option value="">
+                            Selecciona un objetivo
+                        </option>
+                        <option>Hipertrofia</option>
+                        <option>Fuerza</option>
+                        <option>Resistencia</option>
+                        <option>Calistenia</option>
+                        <option>Acondicionamiento físico</option>
+                        <option>General</option>
+                    </select>
+                </div>
+
+                <div class="campo-completo bloque-ejercicios-rutina">
+                    <h3>Agregar ejercicios</h3>
+                    <p class="descripcion">
+                        Selecciona ejercicios de la biblioteca.
+                    </p>
+
+                    <div class="selector-ejercicios-rutina">
+                        <select id="ejercicioRutina">
+                            <option value="">
+                                Selecciona un ejercicio
+                            </option>
+                        </select>
+
+                        <button type="button"
+                                id="agregarEjercicioRutina">
+                            + AGREGAR
+                        </button>
+                    </div>
+
+                    <div id="ejerciciosSeleccionadosRutina">
+                        <p class="mensaje-vacio">
+                            Todavía no has agregado ejercicios.
+                        </p>
+                    </div>
+                </div>
+
+                <button type="submit">
+                    + GUARDAR RUTINA
+                </button>
+            </form>
+
+            <div class="encabezado-lista">
+                <h3>Rutinas registradas</h3>
+                <span id="cantidadRutinas">0 rutinas</span>
+            </div>
+
+            <div id="listaRutinas" class="grid-listado">
+                <p class="mensaje-vacio">
+                    No hay rutinas registradas todavía.
+                </p>
+            </div>
+        </section>
+
+        <!-- SEGUIMIENTO -->
+        <section id="seguimiento" class="seccion">
+
+            <span class="kicker">
+                CONTROL DE ENTRENAMIENTOS
+            </span>
+
+            <h2>SEGUIMIENTO <span>SEMANAL</span></h2>
+
+            <p class="descripcion">
+                Consulta el plan semanal de cada cliente
+                y registra sus sesiones de entrenamiento.
+            </p>
+
+            <div class="modulo-banner banner-seguimiento">
+                <div>
+                    <span class="hero-tag">GYMDATA PROGRESS</span>
+                    <h3>EL PROGRESO SE CONSTRUYE</h3>
+                    <p>
+                        Controla cada entrenamiento de
+                        forma sencilla.
+                    </p>
+                </div>
+            </div>
+
+            <div class="formulario controles-seguimiento">
+                <div class="grupo-formulario">
+                    <label for="clienteSeguimiento">
+                        Cliente
+                    </label>
+                    <select id="clienteSeguimiento">
+                        <option value="">
+                            Selecciona un cliente
+                        </option>
+                    </select>
+                </div>
+
+                <div class="grupo-formulario">
+                    <label for="semanaSeguimiento">
+                        Fecha de la semana
+                    </label>
+                    <input type="date"
+                           id="semanaSeguimiento">
+                </div>
+            </div>
+
+            <div class="encabezado-lista">
+                <h3 id="tituloSemana">Plan semanal</h3>
+                <span id="contadorSemana">
+                    0 sesiones completadas
+                </span>
+            </div>
+
+            <div id="planSemanal" class="grid-semanal">
+                <p class="mensaje-vacio">
+                    Selecciona un cliente para consultar su plan.
+                </p>
+            </div>
+
+            <div class="encabezado-lista separador-historial">
+                <h3>Historial de entrenamientos</h3>
+                <span id="cantidadHistorial">0 registros</span>
+            </div>
+
+            <div id="historialEntrenamientos">
+                <p class="mensaje-vacio">
+                    Todavía no hay entrenamientos registrados.
+                </p>
+            </div>
+        </section>
+
+        <!-- ESTADISTICAS Y REPORTES -->
+        <section id="estadisticas" class="seccion">
+
+            <span class="kicker">GYMDATA ANALYTICS</span>
+
+            <h2>ESTADÍSTICAS <span>Y REPORTES</span></h2>
+
+            <p class="descripcion">
+                Analiza los clientes, las membresías
+                y la actividad de entrenamiento del gimnasio.
+            </p>
+
+            <div class="modulo-banner banner-estadisticas">
+                <div>
+                    <span class="hero-tag">
+                        PANEL DE ANÁLISIS
+                    </span>
+                    <h3>DECISIONES BASADAS EN DATOS</h3>
+                    <p>
+                        Consulta el rendimiento y seguimiento
+                        de tu gimnasio.
+                    </p>
+                </div>
+            </div>
+
+            <!-- INDICADORES -->
+            <div class="grid-estadisticas">
+
+                <article class="tarjeta-estadistica">
+                    <span>CLIENTES REGISTRADOS</span>
+                    <strong id="estadisticaClientes">0</strong>
+                    <small>Total de clientes</small>
+                </article>
+
+                <article class="tarjeta-estadistica">
+                    <span>MEMBRESÍAS ACTIVAS</span>
+                    <strong id="estadisticaActivas">0</strong>
+                    <small>Planes vigentes</small>
+                </article>
+
+                <article class="tarjeta-estadistica">
+                    <span>MEMBRESÍAS VENCIDAS</span>
+                    <strong id="estadisticaVencidas">0</strong>
+                    <small>Planes vencidos</small>
+                </article>
+
+                <article class="tarjeta-estadistica">
+                    <span>PRÓXIMAS A VENCER</span>
+                    <strong id="estadisticaProximas">0</strong>
+                    <small>Dentro de 7 días</small>
+                </article>
+
+                <article class="tarjeta-estadistica">
+                    <span>RUTINAS CREADAS</span>
+                    <strong id="estadisticaRutinas">0</strong>
+                    <small>Planes asignados</small>
+                </article>
+
+                <article class="tarjeta-estadistica">
+                    <span>SESIONES REALIZADAS</span>
+                    <strong id="estadisticaSesiones">0</strong>
+                    <small>Historial acumulado</small>
+                </article>
+
+            </div>
+
+            <!-- GRAFICAS -->
+            <div class="grid-graficas">
+
+                <article class="panel-grafica">
+                    <h3>Distribución de membresías</h3>
+                    <p class="descripcion">
+                        Cantidad registrada por tipo de plan.
+                    </p>
+
+                    <div id="graficaPlanes" class="grafica-barras">
+                        <p class="mensaje-vacio">
+                            Sin datos disponibles.
+                        </p>
+                    </div>
+                </article>
+
+                <article class="panel-grafica">
+                    <h3>Sesiones por día</h3>
+                    <p class="descripcion">
+                        Últimos siete días, incluido hoy.
+                    </p>
+
+                    <div id="graficaSesiones" class="grafica-barras">
+                        <p class="mensaje-vacio">
+                            Sin datos disponibles.
+                        </p>
+                    </div>
+                </article>
+
+            </div>
+
+            <!-- PROXIMOS VENCIMIENTOS -->
+            <div class="panel-reporte">
+                <div class="encabezado-lista">
+                    <h3>Membresías próximas a vencer</h3>
+                    <span>Próximos 7 días</span>
+                </div>
+
+                <div id="listaProximosVencimientos">
+                    <p class="mensaje-vacio">
+                        No hay vencimientos próximos.
+                    </p>
+                </div>
+            </div>
+
+            <!-- REPORTES -->
+            <div class="panel-reporte">
+                <div class="encabezado-lista">
+                    <h3>Reporte de clientes y membresías</h3>
+                    <span id="totalFilasReporte">
+                        0 resultados
+                    </span>
+                </div>
+
+                <div class="filtros-reporte">
+                    <div class="grupo-formulario">
+                        <label for="filtroReporte">
+                            Filtrar por estado
+                        </label>
+                        <select id="filtroReporte">
+                            <option value="Todos">Todos</option>
+                            <option value="Activa">Activas</option>
+                            <option value="Vencida">Vencidas</option>
+                            <option value="Sin membresía">
+                                Sin membresía
+                            </option>
+                        </select>
+                    </div>
+
+                    <button type="button"
+                            id="exportarReporte"
+                            class="boton-exportar">
+                        DESCARGAR REPORTE CSV
+                    </button>
+                </div>
+
+                <div class="tabla-contenedor">
+                    <table class="tabla-reporte">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Documento</th>
+                                <th>Plan</th>
+                                <th>Vencimiento</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpoReporte">
+                            <tr>
+                                <td colspan="5">
+                                    No hay datos disponibles.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <footer class="pie-pagina">
+            © GymData - Sistema de gestión deportiva
+        </footer>
+
+    </main>
+</div>
+
+<!-- ARCHIVOS JAVASCRIPT -->
+<script src="js/clientes.js"></script>
+<script src="js/membresias.js"></script>
+<script src="js/ejercicios.js"></script>
+<script src="js/rutinas.js"></script>
+<script src="js/seguimiento.js"></script>
+<script src="js/estadisticas.js"></script>
+
+</body>
+</html>
