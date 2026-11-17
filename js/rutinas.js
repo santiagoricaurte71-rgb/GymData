@@ -1,48 +1,63 @@
 
 "use strict";
 
-// GYMDATA - PLANES DE ENTRENAMIENTO
+// ==========================================
+// GYMDATA - RUTINAS CON MYSQL
+// ==========================================
 
 let rutinas = [];
 let ejerciciosRutinaActual = [];
 
-try {
-    const datos = JSON.parse(
-        localStorage.getItem("gymdata_rutinas")
-    );
+const API_RUTINAS = "/api/rutinas";
 
-    rutinas = Array.isArray(datos) ? datos : [];
-} catch (error) {
-    console.error("Error al cargar rutinas:", error);
-}
+// ==========================================
+// PETICIONES A LA API
+// ==========================================
 
-// GUARDAR
+async function solicitarAPIRutinas(url, opciones = {}) {
+    let respuesta;
 
-function guardarRutinas() {
     try {
-        localStorage.setItem(
-            "gymdata_rutinas",
-            JSON.stringify(rutinas)
-        );
-        return true;
+        respuesta = await fetch(url, {
+            ...opciones,
+            headers: {
+                "Content-Type": "application/json",
+                ...(opciones.headers || {})
+            }
+        });
+
     } catch (error) {
-        console.error(error);
-        alert("No fue posible guardar la rutina.");
-        return false;
+        throw new Error(
+            "No se pudo conectar con el servidor GymData."
+        );
     }
+
+    let resultado;
+
+    try {
+        resultado = await respuesta.json();
+    } catch (error) {
+        throw new Error(
+            "El servidor devolvió una respuesta no válida."
+        );
+    }
+
+    if (!respuesta.ok || resultado.success === false) {
+        throw new Error(
+            resultado.mensaje || "Ocurrió un error."
+        );
+    }
+
+    return resultado;
 }
 
-function generarIdRutina() {
-    return typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Date.now().toString() +
-          Math.random().toString(16).slice(2);
-}
-
-// CLIENTES DISPONIBLES
+// ==========================================
+// CARGAR CLIENTES
+// ==========================================
 
 function cargarClientesRutina() {
     const selector = document.getElementById("clienteRutina");
+
     if (!selector) return;
 
     const anterior = selector.value;
@@ -53,10 +68,14 @@ function cargarClientesRutina() {
     inicial.textContent = "Selecciona un cliente";
     selector.appendChild(inicial);
 
+    if (typeof clientes === "undefined") return;
+
     clientes.forEach(cliente => {
         const opcion = document.createElement("option");
+
         opcion.value = cliente.id;
         opcion.textContent = cliente.nombre;
+
         selector.appendChild(opcion);
     });
 
@@ -65,13 +84,17 @@ function cargarClientesRutina() {
     }
 }
 
-// EJERCICIOS DISPONIBLES
+// ==========================================
+// CARGAR EJERCICIOS
+// ==========================================
 
 function cargarEjerciciosRutina() {
     const selector = document.getElementById("ejercicioRutina");
+
     if (!selector) return;
 
     const anterior = selector.value;
+
     selector.replaceChildren();
 
     const inicial = document.createElement("option");
@@ -79,10 +102,15 @@ function cargarEjerciciosRutina() {
     inicial.textContent = "Selecciona un ejercicio";
     selector.appendChild(inicial);
 
-    ejercicios.forEach(e => {
+    if (typeof ejercicios === "undefined") return;
+
+    ejercicios.forEach(ejercicio => {
         const opcion = document.createElement("option");
-        opcion.value = e.id;
-        opcion.textContent = `${e.nombre} - ${e.grupo}`;
+
+        opcion.value = ejercicio.id;
+        opcion.textContent =
+            ejercicio.nombre + " - " + ejercicio.grupo;
+
         selector.appendChild(opcion);
     });
 
@@ -91,16 +119,19 @@ function cargarEjerciciosRutina() {
     }
 }
 
-// AGREGAR EJERCICIO A LA RUTINA
+// ==========================================
+// AGREGAR EJERCICIO
+// ==========================================
 
 function agregarEjercicioARutina() {
     const selector = document.getElementById("ejercicioRutina");
+
     const ejercicio = ejercicios.find(
         e => String(e.id) === String(selector.value)
     );
 
     if (!ejercicio) {
-        alert("Selecciona un ejercicio válido.");
+        alert("Selecciona un ejercicio.");
         return;
     }
 
@@ -124,7 +155,9 @@ function agregarEjercicioARutina() {
     mostrarEjerciciosSeleccionados();
 }
 
-// MOSTRAR EJERCICIOS ELEGIDOS
+// ==========================================
+// MOSTRAR EJERCICIOS SELECCIONADOS
+// ==========================================
 
 function mostrarEjerciciosSeleccionados() {
     const contenedor = document.getElementById(
@@ -135,27 +168,31 @@ function mostrarEjerciciosSeleccionados() {
 
     contenedor.replaceChildren();
 
-    if (!ejerciciosRutinaActual.length) {
-        const p = document.createElement("p");
-        p.className = "mensaje-vacio";
-        p.textContent = "Todavía no has agregado ejercicios.";
-        contenedor.appendChild(p);
+    if (ejerciciosRutinaActual.length === 0) {
+        const mensaje = document.createElement("p");
+        mensaje.className = "mensaje-vacio";
+        mensaje.textContent =
+            "Todavía no has agregado ejercicios.";
+
+        contenedor.appendChild(mensaje);
         return;
     }
 
-    ejerciciosRutinaActual.forEach((e, indice) => {
+    ejerciciosRutinaActual.forEach((item, indice) => {
         const fila = document.createElement("div");
         fila.className = "fila-ejercicio-rutina";
 
         const informacion = document.createElement("div");
 
         const titulo = document.createElement("strong");
-        titulo.textContent = `${indice + 1}. ${e.nombre}`;
+        titulo.textContent =
+            `${indice + 1}. ${item.nombre}`;
 
         const detalle = document.createElement("p");
         detalle.textContent =
-            `${e.series} series · ${e.repeticiones} repeticiones · ` +
-            `${e.descanso}s descanso`;
+            `${item.series} series · ` +
+            `${item.repeticiones} repeticiones · ` +
+            `${item.descanso}s descanso`;
 
         informacion.append(titulo, detalle);
 
@@ -174,42 +211,78 @@ function mostrarEjerciciosSeleccionados() {
     });
 }
 
-// REGISTRAR RUTINA
+// ==========================================
+// CONSULTAR RUTINAS DESDE MYSQL
+// ==========================================
 
-function registrarRutina() {
-    const nombre = document.getElementById("nombreRutina")
-        .value.trim();
+async function cargarRutinasDesdeAPI() {
+    try {
+        const resultado = await solicitarAPIRutinas(
+            API_RUTINAS
+        );
 
-    const clienteId =
-        document.getElementById("clienteRutina").value;
+        if (!Array.isArray(resultado.data)) {
+            throw new Error(
+                "La API no devolvió una lista válida."
+            );
+        }
 
-    const dia =
-        document.getElementById("diaRutina").value;
+        rutinas = resultado.data;
 
-    const objetivo =
-        document.getElementById("objetivoRutina").value;
+        mostrarRutinas();
 
-    const cliente = clientes.find(
-        c => String(c.id) === String(clienteId)
-    );
+        if (
+            typeof actualizarPanelSeguimiento === "function"
+        ) {
+            actualizarPanelSeguimiento();
+        }
 
-    if (!nombre || !cliente || !dia || !objetivo) {
-        alert("Completa correctamente los datos de la rutina.");
+        return true;
+
+    } catch (error) {
+        console.error("Cargar rutinas:", error);
+
+        const contenedor = document.getElementById(
+            "listaRutinas"
+        );
+
+        if (contenedor) {
+            contenedor.replaceChildren();
+
+            const mensaje = document.createElement("p");
+            mensaje.className = "mensaje-vacio";
+            mensaje.textContent = error.message;
+
+            contenedor.appendChild(mensaje);
+        }
+
         return false;
     }
+}
 
-    const dias = [
-        "Lunes", "Martes", "Miércoles",
-        "Jueves", "Viernes", "Sábado", "Domingo"
-    ];
+// ==========================================
+// GUARDAR RUTINA
+// ==========================================
 
-    const objetivos = [
-        "Hipertrofia", "Fuerza", "Resistencia",
-        "Calistenia", "Acondicionamiento físico", "General"
-    ];
+async function registrarRutina() {
+    const nombre = document.getElementById(
+        "nombreRutina"
+    ).value.trim();
 
-    if (!dias.includes(dia) || !objetivos.includes(objetivo)) {
-        alert("El día o el objetivo no son válidos.");
+    const clienteId = document.getElementById(
+        "clienteRutina"
+    ).value;
+
+    const dia = document.getElementById(
+        "diaRutina"
+    ).value;
+
+    const objetivo = document.getElementById(
+        "objetivoRutina"
+    ).value;
+
+    if (!nombre || !clienteId || !dia || !objetivo) {
+        alert("Completa todos los campos.");
         return false;
     }
 
@@ -218,44 +291,64 @@ function registrarRutina() {
         return false;
     }
 
-    const nueva = {
-        id: generarIdRutina(),
-        nombre,
-        clienteId: cliente.id,
-        nombreCliente: cliente.nombre,
-        dia,
-        objetivo,
-        ejercicios: ejerciciosRutinaActual.map(e => ({ ...e })),
-        realizada: false,
-        fechaRealizacion: null
-    };
+    try {
+        const resultado = await solicitarAPIRutinas(
+            API_RUTINAS,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    nombre,
+                    clienteId,
+                    dia,
+                    objetivo,
+                    ejercicios: ejerciciosRutinaActual.map(
+                        e => e.id
+                    )
+                })
+            }
+        );
 
-    rutinas.push(nueva);
+        await cargarRutinasDesdeAPI();
 
-    if (!guardarRutinas()) {
-        rutinas.pop();
+        ejerciciosRutinaActual = [];
+        mostrarEjerciciosSeleccionados();
+
+        document.getElementById(
+            "formularioRutina"
+        ).reset();
+
+        alert(
+            resultado.mensaje ||
+            "Rutina registrada correctamente."
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error("Registrar rutina:", error);
+        alert(error.message);
         return false;
     }
-
-    ejerciciosRutinaActual = [];
-
-    document.getElementById("formularioRutina").reset();
-
-    mostrarEjerciciosSeleccionados();
-    mostrarRutinas();
-
-    alert("Rutina registrada correctamente.");
-    return true;
 }
 
+// ==========================================
 // MOSTRAR RUTINAS
+// ==========================================
 
 function mostrarRutinas() {
     const contenedor = document.getElementById("listaRutinas");
-    const cantidad = document.getElementById("cantidadRutinas");
-    const total = document.getElementById("totalRutinas");
 
-    if (total) total.textContent = rutinas.length;
+    const cantidad = document.getElementById(
+        "cantidadRutinas"
+    );
+
+    const total = document.getElementById(
+        "totalRutinas"
+    );
+
+    if (total) {
+        total.textContent = rutinas.length;
+    }
 
     if (cantidad) {
         cantidad.textContent = rutinas.length === 1
@@ -264,17 +357,20 @@ function mostrarRutinas() {
     }
 
     if (!contenedor) return;
+
     contenedor.replaceChildren();
 
-    if (!rutinas.length) {
-        const p = document.createElement("p");
-        p.className = "mensaje-vacio";
-        p.textContent = "No hay rutinas registradas todavía.";
-        contenedor.appendChild(p);
+    if (rutinas.length === 0) {
+        const mensaje = document.createElement("p");
+        mensaje.className = "mensaje-vacio";
+        mensaje.textContent =
+            "No hay rutinas registradas en MySQL.";
+
+        contenedor.appendChild(mensaje);
         return;
     }
 
-    rutinas.forEach(r => {
+    rutinas.forEach(rutina => {
         const tarjeta = document.createElement("article");
         tarjeta.className = "tarjeta-cliente tarjeta-rutina";
 
@@ -282,131 +378,202 @@ function mostrarRutinas() {
         encabezado.className = "encabezado-rutina";
 
         const titulo = document.createElement("h3");
-        titulo.textContent = r.nombre;
+        titulo.textContent = rutina.nombre;
 
         const dia = document.createElement("span");
         dia.className = "etiqueta-muscular";
-        dia.textContent = r.dia;
+        dia.textContent = rutina.dia;
 
         encabezado.append(titulo, dia);
 
         const cliente = document.createElement("p");
-        cliente.textContent = "Cliente: " + r.nombreCliente;
+        cliente.textContent =
+            "Cliente: " + rutina.nombreCliente;
 
         const objetivo = document.createElement("p");
-        objetivo.textContent = "Objetivo: " + r.objetivo;
+        objetivo.textContent =
+            "Objetivo: " + rutina.objetivo;
 
         const lista = document.createElement("ol");
         lista.className = "lista-ejercicios-rutina";
 
-        (r.ejercicios || []).forEach(e => {
-            const li = document.createElement("li");
-            li.textContent =
-                `${e.nombre}: ${e.series} x ${e.repeticiones}, ` +
-                `${e.descanso}s de descanso`;
-            lista.appendChild(li);
+        (rutina.ejercicios || []).forEach(ejercicio => {
+            const elemento = document.createElement("li");
+
+            elemento.textContent =
+                `${ejercicio.nombre} — ` +
+                `${ejercicio.series} x ` +
+                `${ejercicio.repeticiones} ` +
+                `(${ejercicio.descanso}s descanso)`;
+
+            lista.appendChild(elemento);
         });
 
         const estado = document.createElement("span");
-        estado.className = r.realizada
+
+        estado.className = rutina.realizada
             ? "estado-membresia estado-activa"
             : "estado-membresia estado-pendiente";
 
-        estado.textContent = r.realizada
+        estado.textContent = rutina.realizada
             ? "Realizada"
             : "Pendiente";
 
         const acciones = document.createElement("div");
         acciones.className = "acciones-tarjeta";
 
-        const completar = document.createElement("button");
-        completar.type = "button";
-        completar.className = "boton-editar";
-        completar.textContent = r.realizada
+        const botonEstado = document.createElement("button");
+        botonEstado.type = "button";
+        botonEstado.className = "boton-editar";
+
+        botonEstado.textContent = rutina.realizada
             ? "Marcar pendiente"
             : "Marcar realizada";
 
-        completar.addEventListener("click", () => {
-            cambiarEstadoRutina(r.id);
+        botonEstado.addEventListener("click", async () => {
+            botonEstado.disabled = true;
+
+            try {
+                await cambiarEstadoRutina(rutina.id);
+            } finally {
+                botonEstado.disabled = false;
+            }
         });
 
-        const eliminar = document.createElement("button");
-        eliminar.type = "button";
-        eliminar.className = "boton-eliminar";
-        eliminar.textContent = "Eliminar";
+        const botonEliminar = document.createElement("button");
+        botonEliminar.type = "button";
+        botonEliminar.className = "boton-eliminar";
+        botonEliminar.textContent = "Eliminar";
 
-        eliminar.addEventListener("click", () => {
-            eliminarRutina(r.id);
+        botonEliminar.addEventListener("click", async () => {
+            botonEliminar.disabled = true;
+
+            try {
+                await eliminarRutina(rutina.id);
+            } finally {
+                botonEliminar.disabled = false;
+            }
         });
 
-        acciones.append(completar, eliminar);
+        acciones.append(botonEstado, botonEliminar);
 
         tarjeta.append(
-            encabezado, cliente, objetivo,
-            lista, estado, acciones
+            encabezado,
+            cliente,
+            objetivo,
+            lista,
+            estado,
+            acciones
         );
 
         contenedor.appendChild(tarjeta);
     });
 }
 
-// CAMBIAR ESTADO
+// ==========================================
+// CAMBIAR ESTADO DE RUTINA
+// ==========================================
 
-function cambiarEstadoRutina(id) {
+async function cambiarEstadoRutina(id) {
     const rutina = rutinas.find(r => r.id === id);
-    if (!rutina) return;
 
-    const anterior = rutina.realizada;
-    const fechaAnterior = rutina.fechaRealizacion;
+    if (!rutina) return false;
 
-    rutina.realizada = !rutina.realizada;
-    rutina.fechaRealizacion = rutina.realizada
-        ? new Date().toISOString()
-        : null;
+    try {
+        await solicitarAPIRutinas(
+            `${API_RUTINAS}/${encodeURIComponent(id)}/estado`,
+            {
+                method: "PATCH",
+                body: JSON.stringify({
+                    realizada: !rutina.realizada
+                })
+            }
+        );
 
-    if (!guardarRutinas()) {
-        rutina.realizada = anterior;
-        rutina.fechaRealizacion = fechaAnterior;
-        return;
+        await cargarRutinasDesdeAPI();
+
+        return true;
+
+    } catch (error) {
+        alert(error.message);
+        return false;
     }
-
-    mostrarRutinas();
 }
 
-// ELIMINAR
+// ==========================================
+// ELIMINAR RUTINA
+// ==========================================
 
-function eliminarRutina(id) {
-    if (!confirm("¿Eliminar esta rutina?")) return;
-
-    const anteriores = [...rutinas];
-    rutinas = rutinas.filter(r => r.id !== id);
-
-    if (!guardarRutinas()) {
-        rutinas = anteriores;
-        return;
+async function eliminarRutina(id) {
+    if (!confirm("¿Deseas eliminar esta rutina?")) {
+        return false;
     }
 
-    mostrarRutinas();
-    alert("Rutina eliminada correctamente.");
+    try {
+        await solicitarAPIRutinas(
+            `${API_RUTINAS}/${encodeURIComponent(id)}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+        await cargarRutinasDesdeAPI();
+
+        alert("Rutina eliminada correctamente.");
+
+        return true;
+
+    } catch (error) {
+        alert(error.message);
+        return false;
+    }
 }
 
-// INICIALIZAR
+// ==========================================
+// INICIALIZAR MODULO
+// ==========================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    const formulario = document.getElementById("formularioRutina");
+    const formulario = document.getElementById(
+        "formularioRutina"
+    );
+
+    if (!formulario) return;
 
     cargarClientesRutina();
     cargarEjerciciosRutina();
     mostrarEjerciciosSeleccionados();
-    mostrarRutinas();
 
-    if (!formulario) return;
+    cargarRutinasDesdeAPI();
 
-    document.getElementById("agregarEjercicioRutina")
-        .addEventListener("click", agregarEjercicioARutina);
+    document.getElementById(
+        "agregarEjercicioRutina"
+    ).addEventListener(
+        "click",
+        agregarEjercicioARutina
+    );
 
-    formulario.addEventListener("submit", evento => {
+    formulario.addEventListener("submit", async evento => {
         evento.preventDefault();
-        registrarRutina();
+
+        const boton = formulario.querySelector(
+            'button[type="submit"]'
+        );
+
+        if (boton) boton.disabled = true;
+
+        try {
+            await registrarRutina();
+
+        } finally {
+            if (boton) boton.disabled = false;
+        }
     });
+
+    document.querySelector('a[href="#rutinas"]')
+        ?.addEventListener("click", () => {
+            cargarClientesRutina();
+            cargarEjerciciosRutina();
+            cargarRutinasDesdeAPI();
+        });
 });

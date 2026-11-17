@@ -2,662 +2,872 @@
 "use strict";
 
 // ==========================================
-// GYMDATA - ESTADISTICAS Y REPORTES
-// GRAFICAS VERTICALES DE BARRAS
+// GYMDATA - ESTADISTICAS CON MYSQL
+// DIAGRAMAS DE BARRAS VERTICALES
 // ==========================================
 
-// ==========================================
-// FECHAS
-// ==========================================
+(function () {
 
-function fechaHoyEstadisticas() {
-    const hoy = new Date();
-
-    const anio = hoy.getFullYear();
-    const mes = String(hoy.getMonth() + 1).padStart(2, "0");
-    const dia = String(hoy.getDate()).padStart(2, "0");
-
-    return `${anio}-${mes}-${dia}`;
-}
-
-function sumarDiasEstadisticas(valor, cantidad) {
-    const [anio, mes, dia] = valor.split("-").map(Number);
-    const fecha = new Date(anio, mes - 1, dia);
-
-    fecha.setDate(fecha.getDate() + cantidad);
-
-    const a = fecha.getFullYear();
-    const m = String(fecha.getMonth() + 1).padStart(2, "0");
-    const d = String(fecha.getDate()).padStart(2, "0");
-
-    return `${a}-${m}-${d}`;
-}
-
-function mostrarFechaEstadisticas(fecha) {
-    if (!fecha) return "-";
-
-    const partes = fecha.split("-");
-
-    if (partes.length !== 3) return "-";
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
-
-function cambiarTextoEstadisticas(id, valor) {
-    const elemento = document.getElementById(id);
-
-    if (elemento) {
-        elemento.textContent = String(valor);
-    }
-}
-
-// ==========================================
-// OBTENER DATOS DE GYMDATA
-// ==========================================
-
-function datosEstadisticas() {
-    const hoy = fechaHoyEstadisticas();
-    const limite = sumarDiasEstadisticas(hoy, 7);
-
-    const listaClientes =
-        typeof clientes !== "undefined" ? clientes : [];
-
-    const listaMembresias =
-        typeof membresias !== "undefined" ? membresias : [];
-
-    const listaRutinas =
-        typeof rutinas !== "undefined" ? rutinas : [];
-
-    const listaSesiones =
-        typeof sesionesEntrenamiento !== "undefined"
-            ? sesionesEntrenamiento : [];
-
-    const activas = listaMembresias.filter(m =>
-        m.fechaVencimiento >= hoy &&
-        (!m.fechaInicio || m.fechaInicio <= hoy)
-    );
-
-    const vencidas = listaMembresias.filter(m =>
-        m.fechaVencimiento < hoy
-    );
-
-    const proximas = activas.filter(m =>
-        m.fechaVencimiento <= limite
-    );
-
-    return {
-        hoy,
-        listaClientes,
-        listaMembresias,
-        listaRutinas,
-        listaSesiones,
-        activas,
-        vencidas,
-        proximas
+    const API = {
+        clientes: "/api/clientes",
+        membresias: "/api/membresias",
+        rutinas: "/api/rutinas",
+        sesiones: "/api/sesiones"
     };
-}
 
-// ==========================================
-// INDICADORES
-// ==========================================
+    let datos = {
+        clientes: [],
+        membresias: [],
+        rutinas: [],
+        sesiones: []
+    };
 
-function mostrarIndicadoresEstadisticas(datos) {
-    cambiarTextoEstadisticas(
-        "estadisticaClientes",
-        datos.listaClientes.length
-    );
+    let cargaCorrecta = false;
 
-    cambiarTextoEstadisticas(
-        "estadisticaActivas",
-        datos.activas.length
-    );
+    // ======================================
+    // FECHAS
+    // ======================================
 
-    cambiarTextoEstadisticas(
-        "estadisticaVencidas",
-        datos.vencidas.length
-    );
+    function hoyLocal() {
+        const fecha = new Date();
 
-    cambiarTextoEstadisticas(
-        "estadisticaProximas",
-        datos.proximas.length
-    );
+        const anio = fecha.getFullYear();
+        const mes = String(
+            fecha.getMonth() + 1
+        ).padStart(2, "0");
 
-    cambiarTextoEstadisticas(
-        "estadisticaRutinas",
-        datos.listaRutinas.length
-    );
+        const dia = String(
+            fecha.getDate()
+        ).padStart(2, "0");
 
-    cambiarTextoEstadisticas(
-        "estadisticaSesiones",
-        datos.listaSesiones.length
-    );
-}
-
-// ==========================================
-// ESTILOS DE LOS DIAGRAMAS VERTICALES
-// ==========================================
-
-// Se incluyen aqui para no modificar estilos.css
-
-function instalarEstilosGraficas() {
-    if (document.getElementById("estilosGraficasGymData")) {
-        return;
+        return `${anio}-${mes}-${dia}`;
     }
 
-    const estilo = document.createElement("style");
-    estilo.id = "estilosGraficasGymData";
+    function sumarDias(fechaTexto, cantidad) {
+        const [anio, mes, dia] =
+            fechaTexto.split("-").map(Number);
 
-    estilo.textContent = `
-        .gym-grafica-vertical {
-            display: flex;
-            align-items: stretch;
-            justify-content: space-around;
-            gap: 12px;
-            width: 100%;
-            min-height: 260px;
-            margin-top: 18px;
-            padding: 15px 4px 0;
-            border-bottom: 1px solid #385240;
+        const fecha = new Date(
+            anio,
+            mes - 1,
+            dia
+        );
+
+        fecha.setDate(
+            fecha.getDate() + cantidad
+        );
+
+        const nuevoAnio = fecha.getFullYear();
+
+        const nuevoMes = String(
+            fecha.getMonth() + 1
+        ).padStart(2, "0");
+
+        const nuevoDia = String(
+            fecha.getDate()
+        ).padStart(2, "0");
+
+        return `${nuevoAnio}-${nuevoMes}-${nuevoDia}`;
+    }
+
+    function formatearFecha(valor) {
+        if (!valor) return "-";
+
+        const partes = String(valor)
+            .slice(0, 10)
+            .split("-");
+
+        if (partes.length !== 3) return "-";
+
+        return (
+            partes[2] + "/" +
+            partes[1] + "/" +
+            partes[0]
+        );
+    }
+
+    function estadoMembresia(membresia) {
+        const hoy = hoyLocal();
+
+        if (membresia.fechaVencimiento < hoy) {
+            return "Vencida";
         }
 
-        .gym-columna {
-            flex: 1;
-            min-width: 0;
-            max-width: 110px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 6px;
+        if (membresia.fechaInicio > hoy) {
+            return "Programada";
         }
 
-        .gym-valor {
-            font-size: 13px;
-            font-weight: 800;
-            color: #bef264;
+        return "Activa";
+    }
+
+    // ======================================
+    // ELEMENTOS DE INTERFAZ
+    // ======================================
+
+    function texto(id, valor) {
+        const elemento = document.getElementById(id);
+
+        if (elemento) {
+            elemento.textContent = String(valor);
+        }
+    }
+
+    function elemento(
+        etiqueta,
+        contenido = "",
+        clase = ""
+    ) {
+        const nodo = document.createElement(etiqueta);
+
+        nodo.textContent = contenido;
+
+        if (clase) {
+            nodo.className = clase;
         }
 
-        .gym-zona-barra {
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            width: 100%;
-            height: 190px;
-        }
+        return nodo;
+    }
 
-        .gym-barra {
-            width: min(100%, 58px);
-            min-height: 0;
-            background: linear-gradient(
-                180deg,
-                #d9ff95 0%,
-                #a3e635 55%,
-                #4d7c0f 100%
+    // ======================================
+    // CONSULTAR MYSQL MEDIANTE LAS API
+    // ======================================
+
+    async function consultarAPI(ruta) {
+        const respuesta = await fetch(ruta, {
+            headers: {
+                Accept: "application/json"
+            },
+            cache: "no-store"
+        });
+
+        if (!respuesta.ok) {
+            throw new Error(
+                "Error HTTP " + respuesta.status +
+                " al consultar " + ruta
             );
-            border-radius: 9px 9px 0 0;
-            box-shadow: 0 0 15px rgba(190,242,100,.16);
-            transition: height .35s ease;
         }
 
-        .gym-barra:hover {
-            filter: brightness(1.15);
+        const resultado = await respuesta.json();
+
+        if (
+            resultado.success !== true ||
+            !Array.isArray(resultado.data)
+        ) {
+            throw new Error(
+                "Respuesta incorrecta de " + ruta
+            );
         }
 
-        .gym-etiqueta {
-            min-height: 36px;
-            max-width: 100%;
-            text-align: center;
-            color: #c9d7cd;
-            font-size: 11px;
-            overflow-wrap: anywhere;
-            line-height: 1.3;
+        return resultado.data;
+    }
+
+    async function cargarDatosMySQL() {
+        const [
+            clientes,
+            membresias,
+            rutinas,
+            sesiones
+        ] = await Promise.all([
+            consultarAPI(API.clientes),
+            consultarAPI(API.membresias),
+            consultarAPI(API.rutinas),
+            consultarAPI(API.sesiones)
+        ]);
+
+        datos = {
+            clientes,
+            membresias,
+            rutinas,
+            sesiones
+        };
+    }
+
+    // ======================================
+    // INDICADORES
+    // ======================================
+
+    function calcularIndicadores() {
+        const hoy = hoyLocal();
+        const limite = sumarDias(hoy, 7);
+
+        const activas = datos.membresias.filter(
+            item =>
+                estadoMembresia(item) === "Activa"
+        );
+
+        const vencidas = datos.membresias.filter(
+            item =>
+                estadoMembresia(item) === "Vencida"
+        );
+
+        const proximas = activas.filter(
+            item =>
+                item.fechaVencimiento >= hoy &&
+                item.fechaVencimiento <= limite
+        );
+
+        return {
+            activas,
+            vencidas,
+            proximas
+        };
+    }
+
+    function mostrarIndicadores() {
+        const indicadores = calcularIndicadores();
+
+        texto(
+            "estadisticaClientes",
+            datos.clientes.length
+        );
+
+        texto(
+            "estadisticaActivas",
+            indicadores.activas.length
+        );
+
+        texto(
+            "estadisticaVencidas",
+            indicadores.vencidas.length
+        );
+
+        texto(
+            "estadisticaProximas",
+            indicadores.proximas.length
+        );
+
+        texto(
+            "estadisticaRutinas",
+            datos.rutinas.length
+        );
+
+        texto(
+            "estadisticaSesiones",
+            datos.sesiones.length
+        );
+
+        // Mantener actualizado el resumen inicial.
+        texto(
+            "totalClientes",
+            datos.clientes.length
+        );
+
+        texto(
+            "membresiasActivas",
+            indicadores.activas.length
+        );
+
+        texto(
+            "membresiasVencidas",
+            indicadores.vencidas.length
+        );
+
+        texto(
+            "totalRutinas",
+            datos.rutinas.length
+        );
+
+        texto(
+            "totalSesiones",
+            datos.sesiones.length
+        );
+    }
+
+    // ======================================
+    // ESTILOS DE BARRAS VERTICALES
+    // ======================================
+
+    function instalarEstilos() {
+        if (
+            document.getElementById(
+                "gymdata-estilos-graficas"
+            )
+        ) {
+            return;
         }
 
-        .gym-sin-datos {
-            width: 100%;
-            padding: 30px 12px;
-            color: #a4b8aa;
-            text-align: center;
-        }
+        const estilo = document.createElement("style");
 
-        @media (max-width: 600px) {
-            .gym-grafica-vertical {
-                gap: 5px;
-                min-height: 235px;
+        estilo.id = "gymdata-estilos-graficas";
+
+        estilo.textContent = `
+            .gym-barras-verticales {
+                display: flex;
+                justify-content: space-around;
+                align-items: stretch;
+                gap: 12px;
+                margin-top: 22px;
+                padding: 12px 4px 0;
+                min-height: 255px;
+                border-bottom: 1px solid #385240;
             }
 
-            .gym-zona-barra {
-                height: 160px;
+            .gym-columna {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+                align-items: center;
+                gap: 7px;
             }
 
             .gym-valor {
+                color: #bef264;
+                font-weight: 800;
+                font-size: 13px;
+            }
+
+            .gym-area-barra {
+                height: 180px;
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: flex-end;
+            }
+
+            .gym-barra-vertical {
+                width: min(100%, 60px);
+                border-radius: 9px 9px 0 0;
+                background: linear-gradient(
+                    180deg,
+                    #d9ff95,
+                    #a3e635 55%,
+                    #4d7c0f
+                );
+                box-shadow:
+                    0 0 14px rgba(190,242,100,.15);
+                transition: height .3s ease;
+            }
+
+            .gym-barra-vertical:hover {
+                filter: brightness(1.2);
+            }
+
+            .gym-nombre-columna {
+                display: block;
+                min-height: 38px;
+                max-width: 100%;
+                text-align: center;
                 font-size: 11px;
+                line-height: 1.3;
+                color: #c9d7cd;
+                overflow-wrap: anywhere;
             }
 
-            .gym-etiqueta {
-                font-size: 9px;
+            @media (max-width: 600px) {
+                .gym-barras-verticales {
+                    gap: 5px;
+                }
+
+                .gym-area-barra {
+                    height: 155px;
+                }
+
+                .gym-nombre-columna {
+                    font-size: 9px;
+                }
             }
-        }
-    `;
+        `;
 
-    document.head.appendChild(estilo);
-}
-
-// ==========================================
-// CONSTRUIR GRAFICA VERTICAL
-// ==========================================
-
-function construirGraficaVertical(id, elementos) {
-    const contenedor = document.getElementById(id);
-
-    if (!contenedor) return;
-
-    contenedor.replaceChildren();
-
-    const total = elementos.reduce(
-        (suma, item) => suma + item.valor,
-        0
-    );
-
-    if (total === 0) {
-        const mensaje = document.createElement("p");
-        mensaje.className = "gym-sin-datos";
-        mensaje.textContent =
-            "No hay datos registrados para esta gráfica.";
-
-        contenedor.appendChild(mensaje);
-        return;
+        document.head.appendChild(estilo);
     }
 
-    const maximo = Math.max(
-        1,
-        ...elementos.map(item => item.valor)
-    );
+    // ======================================
+    // CONSTRUIR GRAFICAS
+    // ======================================
 
-    const grafica = document.createElement("div");
-    grafica.className = "gym-grafica-vertical";
-    grafica.setAttribute("role", "img");
-    grafica.setAttribute(
-        "aria-label",
-        elementos.map(item =>
-            `${item.nombre}: ${item.valor}`
-        ).join(", ")
-    );
+    function crearGrafica(id, valores) {
+        const contenedor = document.getElementById(id);
 
-    elementos.forEach(item => {
-        const columna = document.createElement("div");
-        columna.className = "gym-columna";
+        if (!contenedor) return;
 
-        const valor = document.createElement("span");
-        valor.className = "gym-valor";
-        valor.textContent = item.valor;
+        contenedor.replaceChildren();
 
-        const zona = document.createElement("div");
-        zona.className = "gym-zona-barra";
-
-        const barra = document.createElement("div");
-        barra.className = "gym-barra";
-
-        const porcentaje = item.valor / maximo * 100;
-
-        barra.style.height = `${porcentaje}%`;
-        barra.title = `${item.nombre}: ${item.valor}`;
-
-        zona.appendChild(barra);
-
-        const etiqueta = document.createElement("span");
-        etiqueta.className = "gym-etiqueta";
-        etiqueta.textContent = item.nombre;
-
-        columna.append(valor, zona, etiqueta);
-        grafica.appendChild(columna);
-    });
-
-    contenedor.appendChild(grafica);
-}
-
-// ==========================================
-// GRAFICA DE PLANES
-// ==========================================
-
-function mostrarGraficaPlanes(datos) {
-    const planes = [
-        "Mensual",
-        "Trimestral",
-        "Semestral"
-    ];
-
-    const cantidades = planes.map(plan => ({
-        nombre: plan,
-        valor: datos.listaMembresias.filter(
-            membresia => membresia.plan === plan
-        ).length
-    }));
-
-    construirGraficaVertical(
-        "graficaPlanes",
-        cantidades
-    );
-}
-
-// ==========================================
-// GRAFICA DE SESIONES POR DIA
-// ==========================================
-
-function mostrarGraficaSesiones(datos) {
-    const registros = [];
-
-    for (let i = 6; i >= 0; i--) {
-        const fecha = sumarDiasEstadisticas(datos.hoy, -i);
-
-        const [anio, mes, dia] = fecha
-            .split("-")
-            .map(Number);
-
-        const etiqueta = new Date(
-            anio, mes - 1, dia
-        ).toLocaleDateString("es-CO", {
-            weekday: "short",
-            day: "numeric"
-        });
-
-        const total = datos.listaSesiones.filter(
-            sesion => sesion.fecha === fecha
-        ).length;
-
-        registros.push({
-            nombre: etiqueta,
-            valor: total
-        });
-    }
-
-    construirGraficaVertical(
-        "graficaSesiones",
-        registros
-    );
-}
-
-// ==========================================
-// PROXIMOS VENCIMIENTOS
-// ==========================================
-
-function mostrarProximosVencimientos(datos) {
-    const contenedor = document.getElementById(
-        "listaProximosVencimientos"
-    );
-
-    if (!contenedor) return;
-
-    contenedor.replaceChildren();
-
-    const proximas = [...datos.proximas].sort(
-        (a, b) =>
-            a.fechaVencimiento.localeCompare(b.fechaVencimiento)
-    );
-
-    if (!proximas.length) {
-        const p = document.createElement("p");
-        p.className = "mensaje-vacio";
-        p.textContent =
-            "No hay membresías próximas a vencer.";
-
-        contenedor.appendChild(p);
-        return;
-    }
-
-    proximas.forEach(m => {
-        const fila = document.createElement("div");
-        fila.className = "fila-vencimiento";
-
-        const info = document.createElement("div");
-
-        const nombre = document.createElement("strong");
-        nombre.textContent = m.nombreCliente;
-
-        const detalle = document.createElement("p");
-        detalle.textContent =
-            `${m.plan} · Vence: ` +
-            mostrarFechaEstadisticas(m.fechaVencimiento);
-
-        info.append(nombre, detalle);
-
-        const etiqueta = document.createElement("span");
-        etiqueta.className = "etiqueta-alerta";
-
-        etiqueta.textContent =
-            m.fechaVencimiento === datos.hoy
-                ? "Vence hoy"
-                : "Próximo vencimiento";
-
-        fila.append(info, etiqueta);
-        contenedor.appendChild(fila);
-    });
-}
-
-// ==========================================
-// CONSTRUIR REPORTE
-// ==========================================
-
-function construirFilasReporte(datos) {
-    const filas = [];
-
-    datos.listaClientes.forEach(cliente => {
-        const relacionadas = datos.listaMembresias.filter(
-            m => String(m.clienteId) === String(cliente.id)
+        const total = valores.reduce(
+            (suma, item) => suma + item.valor,
+            0
         );
 
-        if (!relacionadas.length) {
-            filas.push({
-                cliente: cliente.nombre,
-                documento: cliente.documento || "",
-                plan: "-",
-                vencimiento: "",
-                estado: "Sin membresía"
+        if (total === 0) {
+            contenedor.appendChild(
+                elemento(
+                    "p",
+                    "No hay datos registrados para esta gráfica.",
+                    "mensaje-vacio"
+                )
+            );
+            return;
+        }
+
+        const maximo = Math.max(
+            1,
+            ...valores.map(item => item.valor)
+        );
+
+        const grafica = document.createElement("div");
+
+        grafica.className = "gym-barras-verticales";
+        grafica.setAttribute("role", "img");
+
+        grafica.setAttribute(
+            "aria-label",
+            valores.map(item =>
+                item.nombre + ": " + item.valor
+            ).join(", ")
+        );
+
+        valores.forEach(item => {
+            const columna = document.createElement("div");
+            columna.className = "gym-columna";
+
+            const cantidad = elemento(
+                "span",
+                String(item.valor),
+                "gym-valor"
+            );
+
+            const area = document.createElement("div");
+            area.className = "gym-area-barra";
+
+            const barra = document.createElement("div");
+            barra.className = "gym-barra-vertical";
+
+            const porcentaje =
+                (item.valor / maximo) * 100;
+
+            barra.style.height =
+                porcentaje + "%";
+
+            barra.title =
+                item.nombre + ": " + item.valor;
+
+            area.appendChild(barra);
+
+            const nombre = elemento(
+                "span",
+                item.nombre,
+                "gym-nombre-columna"
+            );
+
+            columna.append(
+                cantidad,
+                area,
+                nombre
+            );
+
+            grafica.appendChild(columna);
+        });
+
+        contenedor.appendChild(grafica);
+    }
+
+    // ======================================
+    // GRAFICA DE MEMBRESIAS
+    // ======================================
+
+    function mostrarGraficaPlanes() {
+        const nombres = [
+            "Mensual",
+            "Trimestral",
+            "Semestral"
+        ];
+
+        const valores = nombres.map(plan => ({
+            nombre: plan,
+            valor: datos.membresias.filter(
+                item => item.plan === plan
+            ).length
+        }));
+
+        crearGrafica("graficaPlanes", valores);
+    }
+
+    // ======================================
+    // GRAFICA DE ENTRENAMIENTOS
+    // ======================================
+
+    function mostrarGraficaSesiones() {
+        const hoy = hoyLocal();
+
+        const valores = [];
+
+        for (let i = 6; i >= 0; i--) {
+            const fecha = sumarDias(hoy, -i);
+
+            const [anio, mes, dia] =
+                fecha.split("-").map(Number);
+
+            const nombre = new Date(
+                anio,
+                mes - 1,
+                dia
+            ).toLocaleDateString("es-CO", {
+                weekday: "short",
+                day: "numeric"
             });
+
+            const cantidad = datos.sesiones.filter(
+                sesion => sesion.fecha === fecha
+            ).length;
+
+            valores.push({
+                nombre,
+                valor: cantidad
+            });
+        }
+
+        crearGrafica("graficaSesiones", valores);
+    }
+
+    // ======================================
+    // MEMBRESIAS PROXIMAS A VENCER
+    // ======================================
+
+    function mostrarProximosVencimientos() {
+        const contenedor = document.getElementById(
+            "listaProximosVencimientos"
+        );
+
+        if (!contenedor) return;
+
+        contenedor.replaceChildren();
+
+        const proximas = calcularIndicadores()
+            .proximas
+            .slice()
+            .sort(
+                (a, b) =>
+                    a.fechaVencimiento.localeCompare(
+                        b.fechaVencimiento
+                    )
+            );
+
+        if (!proximas.length) {
+            contenedor.appendChild(
+                elemento(
+                    "p",
+                    "No hay membresías próximas a vencer.",
+                    "mensaje-vacio"
+                )
+            );
 
             return;
         }
 
-        relacionadas.forEach(m => {
-            let estado = "Activa";
+        proximas.forEach(item => {
+            const fila = document.createElement("div");
+            fila.className = "fila-vencimiento";
 
-            if (m.fechaVencimiento < datos.hoy) {
-                estado = "Vencida";
-            } else if (
-                m.fechaInicio &&
-                m.fechaInicio > datos.hoy
-            ) {
-                estado = "Programada";
+            const informacion = document.createElement("div");
+
+            informacion.appendChild(
+                elemento("strong", item.nombreCliente)
+            );
+
+            informacion.appendChild(
+                elemento(
+                    "p",
+                    item.plan +
+                    " · Vence: " +
+                    formatearFecha(
+                        item.fechaVencimiento
+                    )
+                )
+            );
+
+            const aviso = elemento(
+                "span",
+                item.fechaVencimiento === hoyLocal()
+                    ? "Vence hoy"
+                    : "Próximo vencimiento",
+                "etiqueta-alerta"
+            );
+
+            fila.append(informacion, aviso);
+            contenedor.appendChild(fila);
+        });
+    }
+
+    // ======================================
+    // REPORTE DE CLIENTES
+    // ======================================
+
+    function construirFilasReporte() {
+        const filas = [];
+
+        datos.clientes.forEach(cliente => {
+            const relacionadas =
+                datos.membresias.filter(
+                    membresia =>
+                        String(membresia.clienteId) ===
+                        String(cliente.id)
+                );
+
+            if (!relacionadas.length) {
+                filas.push({
+                    cliente: cliente.nombre,
+                    documento: cliente.documento || "",
+                    plan: "-",
+                    vencimiento: "",
+                    estado: "Sin membresía"
+                });
+
+                return;
             }
 
-            filas.push({
-                cliente: cliente.nombre,
-                documento: cliente.documento || "",
-                plan: m.plan,
-                vencimiento: m.fechaVencimiento,
-                estado
+            relacionadas.forEach(membresia => {
+                filas.push({
+                    cliente: cliente.nombre,
+                    documento: cliente.documento || "",
+                    plan: membresia.plan,
+                    vencimiento:
+                        membresia.fechaVencimiento,
+                    estado:
+                        estadoMembresia(membresia)
+                });
             });
         });
-    });
 
-    return filas;
-}
-
-function filasFiltradasReporte(datos) {
-    const filtro = document.getElementById(
-        "filtroReporte"
-    )?.value || "Todos";
-
-    const filas = construirFilasReporte(datos);
-
-    return filtro === "Todos"
-        ? filas
-        : filas.filter(fila => fila.estado === filtro);
-}
-
-// ==========================================
-// MOSTRAR REPORTE
-// ==========================================
-
-function mostrarReporte(datos) {
-    const cuerpo = document.getElementById(
-        "cuerpoReporte"
-    );
-
-    if (!cuerpo) return;
-
-    cuerpo.replaceChildren();
-
-    const filas = filasFiltradasReporte(datos);
-
-    cambiarTextoEstadisticas(
-        "totalFilasReporte",
-        `${filas.length} resultados`
-    );
-
-    if (!filas.length) {
-        const tr = document.createElement("tr");
-        const td = document.createElement("td");
-
-        td.colSpan = 5;
-        td.textContent = "No se encontraron resultados.";
-
-        tr.appendChild(td);
-        cuerpo.appendChild(tr);
-        return;
+        return filas;
     }
 
-    filas.forEach(fila => {
-        const tr = document.createElement("tr");
+    function filasFiltradas() {
+        const filtro = document.getElementById(
+            "filtroReporte"
+        )?.value || "Todos";
 
-        const valores = [
-            fila.cliente,
-            fila.documento,
-            fila.plan,
-            mostrarFechaEstadisticas(fila.vencimiento),
-            fila.estado
+        const filas = construirFilasReporte();
+
+        return filtro === "Todos"
+            ? filas
+            : filas.filter(
+                fila => fila.estado === filtro
+            );
+    }
+
+    function mostrarReporte() {
+        const cuerpo = document.getElementById(
+            "cuerpoReporte"
+        );
+
+        if (!cuerpo) return;
+
+        cuerpo.replaceChildren();
+
+        const filas = filasFiltradas();
+
+        texto(
+            "totalFilasReporte",
+            filas.length + " resultados"
+        );
+
+        if (!filas.length) {
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+
+            td.colSpan = 5;
+            td.textContent =
+                "No se encontraron resultados.";
+
+            tr.appendChild(td);
+            cuerpo.appendChild(tr);
+            return;
+        }
+
+        filas.forEach(fila => {
+            const tr = document.createElement("tr");
+
+            const valores = [
+                fila.cliente,
+                fila.documento,
+                fila.plan,
+                formatearFecha(fila.vencimiento),
+                fila.estado
+            ];
+
+            valores.forEach(valor => {
+                tr.appendChild(
+                    elemento("td", valor)
+                );
+            });
+
+            cuerpo.appendChild(tr);
+        });
+    }
+
+    // ======================================
+    // EXPORTAR CSV
+    // ======================================
+
+    function escaparCSV(valor) {
+        let contenido = String(valor ?? "");
+
+        // Evitar ejecución de fórmulas en Excel.
+        if (/^[\s]*[=+\-@\t\r]/.test(contenido)) {
+            contenido = "'" + contenido;
+        }
+
+        return '"' +
+            contenido.replace(/"/g, '""') +
+            '"';
+    }
+
+    function exportarReporte() {
+        if (!cargaCorrecta) {
+            alert(
+                "Primero debes cargar las estadísticas."
+            );
+            return;
+        }
+
+        const filas = filasFiltradas();
+
+        if (!filas.length) {
+            alert("No hay datos para exportar.");
+            return;
+        }
+
+        const contenido = [
+            [
+                "Cliente",
+                "Documento",
+                "Plan",
+                "Vencimiento",
+                "Estado"
+            ],
+            ...filas.map(fila => [
+                fila.cliente,
+                fila.documento,
+                fila.plan,
+                formatearFecha(
+                    fila.vencimiento
+                ),
+                fila.estado
+            ])
         ];
 
-        valores.forEach(valor => {
-            const td = document.createElement("td");
-            td.textContent = valor;
-            tr.appendChild(td);
-        });
+        const csv = contenido.map(fila =>
+            fila.map(escaparCSV).join(";")
+        ).join("\r\n");
 
-        cuerpo.appendChild(tr);
-    });
-}
+        const archivo = new Blob(
+            ["\uFEFF" + csv],
+            {
+                type: "text/csv;charset=utf-8"
+            }
+        );
 
-// ==========================================
-// EXPORTACION CSV
-// ==========================================
+        const url = URL.createObjectURL(archivo);
+        const enlace = document.createElement("a");
 
-function escaparCeldaCSV(valor) {
-    let texto = String(valor ?? "");
+        enlace.href = url;
+        enlace.download =
+            "GymData_Reporte_" +
+            hoyLocal() +
+            ".csv";
 
-    if (/^[\s]*[=+\-@\t\r]/.test(texto)) {
-        texto = "'" + texto;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+
+        setTimeout(
+            () => URL.revokeObjectURL(url),
+            1000
+        );
     }
 
-    return '"' + texto.replace(/"/g, '""') + '"';
-}
+    // ======================================
+    // ACTUALIZAR ESTADISTICAS
+    // ======================================
 
-function exportarReporteEstadisticas() {
-    const datos = datosEstadisticas();
-    const filas = filasFiltradasReporte(datos);
+    async function actualizarEstadisticas() {
+        try {
+            cargaCorrecta = false;
 
-    if (!filas.length) {
-        alert("No hay información para exportar.");
-        return;
+            await cargarDatosMySQL();
+
+            cargaCorrecta = true;
+
+            mostrarIndicadores();
+            mostrarGraficaPlanes();
+            mostrarGraficaSesiones();
+            mostrarProximosVencimientos();
+            mostrarReporte();
+
+            console.log(
+                "Estadísticas actualizadas desde MySQL."
+            );
+
+        } catch (error) {
+            console.error(
+                "Error al cargar estadísticas:",
+                error
+            );
+
+            const contenedor = document.getElementById(
+                "graficaPlanes"
+            );
+
+            if (contenedor) {
+                contenedor.replaceChildren();
+
+                contenedor.appendChild(
+                    elemento(
+                        "p",
+                        "No fue posible cargar las estadísticas. " +
+                        "Comprueba la conexión con MySQL.",
+                        "mensaje-vacio"
+                    )
+                );
+            }
+        }
     }
 
-    const encabezados = [
-        "Cliente",
-        "Documento",
-        "Plan",
-        "Vencimiento",
-        "Estado"
-    ];
+    // Disponible para Seguimiento semanal.
+    window.actualizarEstadisticas =
+        actualizarEstadisticas;
 
-    const contenido = [
-        encabezados,
-        ...filas.map(fila => [
-            fila.cliente,
-            fila.documento,
-            fila.plan,
-            fila.vencimiento
-                ? mostrarFechaEstadisticas(fila.vencimiento)
-                : "",
-            fila.estado
-        ])
-    ];
+    // ======================================
+    // INICIALIZAR
+    // ======================================
 
-    const csv = contenido.map(fila =>
-        fila.map(escaparCeldaCSV).join(";")
-    ).join("\r\n");
+    document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+            instalarEstilos();
 
-    const archivo = new Blob(
-        ["\uFEFF" + csv],
-        { type: "text/csv;charset=utf-8;" }
+            const filtro = document.getElementById(
+                "filtroReporte"
+            );
+
+            const exportar = document.getElementById(
+                "exportarReporte"
+            );
+
+            if (filtro) {
+                filtro.addEventListener(
+                    "change",
+                    mostrarReporte
+                );
+            }
+
+            if (exportar) {
+                exportar.addEventListener(
+                    "click",
+                    exportarReporte
+                );
+            }
+
+            document.querySelector(
+                'a[href="#estadisticas"]'
+            )?.addEventListener(
+                "click",
+                actualizarEstadisticas
+            );
+
+            actualizarEstadisticas();
+        }
     );
 
-    const url = URL.createObjectURL(archivo);
-    const enlace = document.createElement("a");
-
-    enlace.href = url;
-    enlace.download =
-        `gymdata_reporte_${datos.hoy}.csv`;
-
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ==========================================
-// ACTUALIZAR TODO
-// ==========================================
-
-function actualizarEstadisticas() {
-    const datos = datosEstadisticas();
-
-    mostrarIndicadoresEstadisticas(datos);
-    mostrarGraficaPlanes(datos);
-    mostrarGraficaSesiones(datos);
-    mostrarProximosVencimientos(datos);
-    mostrarReporte(datos);
-}
-
-// ==========================================
-// INICIALIZAR
-// ==========================================
-
-document.addEventListener("DOMContentLoaded", () => {
-    instalarEstilosGraficas();
-
-    const filtro = document.getElementById("filtroReporte");
-    const exportar = document.getElementById("exportarReporte");
-
-    if (!filtro || !exportar) return;
-
-    filtro.addEventListener(
-        "change",
-        actualizarEstadisticas
-    );
-
-    exportar.addEventListener(
-        "click",
-        exportarReporteEstadisticas
-    );
-
-    document.querySelector('a[href="#estadisticas"]')
-        ?.addEventListener("click", actualizarEstadisticas);
-
-    window.addEventListener(
-        "focus",
-        actualizarEstadisticas
-    );
-
-    actualizarEstadisticas();
-});
+})();

@@ -1,0 +1,43 @@
+
+# ==========================================
+# GYMDATA - ARCHIVOS EXCLUIDOS DE GIT
+# ==========================================
+
+# Credenciales y variables de entorno
+.env
+.env.*
+!.env.example
+
+# Claves privadas
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependencias de Node.js
+node_modules/
+
+# Archivos temporales
+*.log
+*.tmp
+*.bak
+
+# Carpetas de compilacion
+dist/
+build/
+coverage/
+
+# Configuracion local
+.vscode/
+.idea/
+
+# Archivos de Windows
+Thumbs.db
+Desktop.ini
+
+# Copias de seguridad
+backups/
+*.backup
+
+# Respaldo temporal de GymData
+js/respaldo.js

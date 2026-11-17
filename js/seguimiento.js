@@ -3,32 +3,29 @@
 
 // ==========================================
 // GYMDATA - SEGUIMIENTO SEMANAL
+// NODE.JS + EXPRESS + MYSQL
 // ==========================================
 
-// Historial separado de las rutinas.
-// Así una rutina puede completarse varias semanas.
+// Sesiones consultadas desde MySQL.
+// Los datos antiguos de localStorage no se borran.
 
 let sesionesEntrenamiento = [];
 
-try {
-    const datos = JSON.parse(
-        localStorage.getItem("gymdata_sesiones")
-    );
-    sesionesEntrenamiento = Array.isArray(datos)
-        ? datos
-        : [];
-} catch (error) {
-    console.error("Error al cargar sesiones:", error);
-}
-
-// ==========================================
-// FUNCIONES DE FECHAS
-// ==========================================
+const API_SESIONES = "/api/sesiones";
 
 const diasSeguimiento = [
-    "Lunes", "Martes", "Miércoles",
-    "Jueves", "Viernes", "Sábado", "Domingo"
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+    "Domingo"
 ];
+
+// ==========================================
+// MANEJO DE FECHAS
+// ==========================================
 
 function fechaISOlocal(fecha) {
     const anio = fecha.getFullYear();
@@ -40,49 +37,91 @@ function fechaISOlocal(fecha) {
 
 function convertirFechaLocal(valor) {
     const [anio, mes, dia] = valor.split("-").map(Number);
+
     return new Date(anio, mes - 1, dia);
 }
 
 function fechaLegible(valor) {
+    if (!valor) return "-";
+
     return convertirFechaLocal(valor).toLocaleDateString(
         "es-CO",
-        { day: "2-digit", month: "short", year: "numeric" }
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        }
     );
 }
 
 function lunesDeSemana(valor) {
     const fecha = convertirFechaLocal(valor);
     const dia = (fecha.getDay() + 6) % 7;
+
     fecha.setDate(fecha.getDate() - dia);
+
     return fecha;
 }
 
 function agregarDias(fecha, cantidad) {
     const resultado = new Date(fecha);
-    resultado.setDate(resultado.getDate() + cantidad);
+
+    resultado.setDate(
+        resultado.getDate() + cantidad
+    );
+
     return fechaISOlocal(resultado);
 }
 
 // ==========================================
-// GUARDAR SESIONES
+// CONEXION CON API
 // ==========================================
 
-function guardarSesiones() {
+async function solicitarAPISesiones(
+    url,
+    opciones = {}
+) {
+    let respuesta;
+
     try {
-        localStorage.setItem(
-            "gymdata_sesiones",
-            JSON.stringify(sesionesEntrenamiento)
-        );
-        return true;
+        respuesta = await fetch(url, {
+            ...opciones,
+            headers: {
+                "Content-Type": "application/json",
+                ...(opciones.headers || {})
+            }
+        });
+
     } catch (error) {
-        console.error("Error al guardar sesiones:", error);
-        alert("No fue posible guardar el entrenamiento.");
-        return false;
+        throw new Error(
+            "No fue posible conectar con GymData. " +
+            "Comprueba que el servidor esté funcionando."
+        );
     }
+
+    let resultado;
+
+    try {
+        resultado = await respuesta.json();
+
+    } catch (error) {
+        throw new Error(
+            "El servidor no devolvió una respuesta válida."
+        );
+    }
+
+    if (!respuesta.ok || resultado.success === false) {
+        throw new Error(
+            resultado.mensaje ||
+            "No fue posible completar la operación."
+        );
+    }
+
+    return resultado;
 }
 
 // ==========================================
-// SELECCIONAR CLIENTE
+// CARGAR CLIENTES
 // ==========================================
 
 function cargarClientesSeguimiento() {
@@ -93,51 +132,116 @@ function cargarClientesSeguimiento() {
     if (!selector) return;
 
     const anterior = selector.value;
+
     selector.replaceChildren();
 
     const inicial = document.createElement("option");
     inicial.value = "";
     inicial.textContent = "Selecciona un cliente";
+
     selector.appendChild(inicial);
 
     if (typeof clientes === "undefined") return;
 
     clientes.forEach(cliente => {
         const opcion = document.createElement("option");
+
         opcion.value = cliente.id;
         opcion.textContent = cliente.nombre;
+
         selector.appendChild(opcion);
     });
 
-    if (clientes.some(
-        cliente => String(cliente.id) === anterior
-    )) {
+    if (
+        clientes.some(
+            cliente => String(cliente.id) === anterior
+        )
+    ) {
         selector.value = anterior;
     }
 }
 
 // ==========================================
-// TOTAL GENERAL
+// ACTUALIZAR CONTADOR
 // ==========================================
 
 function actualizarTotalSesiones() {
-    const contador = document.getElementById("totalSesiones");
+    const contador = document.getElementById(
+        "totalSesiones"
+    );
 
     if (contador) {
-        contador.textContent = sesionesEntrenamiento.length;
+        contador.textContent =
+            sesionesEntrenamiento.length;
     }
 }
 
 // ==========================================
-// REGISTRAR UNA SESION
+// CARGAR SESIONES DESDE MYSQL
 // ==========================================
 
-function registrarSesion(rutina, fecha) {
+async function cargarSesionesDesdeAPI() {
+    try {
+        const resultado = await solicitarAPISesiones(
+            API_SESIONES
+        );
+
+        if (!Array.isArray(resultado.data)) {
+            throw new Error(
+                "El servidor no devolvió una lista de sesiones."
+            );
+        }
+
+        sesionesEntrenamiento = resultado.data;
+
+        actualizarPanelSeguimiento();
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al cargar sesiones:",
+            error
+        );
+
+        mostrarErrorSeguimiento(error.message);
+
+        return false;
+    }
+}
+
+// ==========================================
+// MOSTRAR ERRORES
+// ==========================================
+
+function mostrarErrorSeguimiento(mensaje) {
+    const contenedor = document.getElementById(
+        "planSemanal"
+    );
+
+    if (!contenedor) return;
+
+    contenedor.replaceChildren();
+
+    const aviso = document.createElement("p");
+    aviso.className = "mensaje-vacio";
+    aviso.textContent = mensaje;
+
+    contenedor.appendChild(aviso);
+}
+
+// ==========================================
+// REGISTRAR ENTRENAMIENTO
+// ==========================================
+
+async function registrarSesion(rutina, fecha) {
     const hoy = fechaISOlocal(new Date());
 
     if (fecha > hoy) {
-        alert("No puedes completar entrenamientos futuros.");
-        return;
+        alert(
+            "No puedes registrar entrenamientos futuros."
+        );
+        return false;
     }
 
     const duplicada = sesionesEntrenamiento.some(
@@ -148,70 +252,103 @@ function registrarSesion(rutina, fecha) {
 
     if (duplicada) {
         alert(
-            "Este entrenamiento ya fue registrado en esa fecha."
+            "Este entrenamiento ya fue registrado " +
+            "en esa fecha."
         );
-        return;
+        return false;
     }
 
-    const nuevaSesion = {
-        id: typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : Date.now().toString() +
-              Math.random().toString(16).slice(2),
+    try {
+        const resultado = await solicitarAPISesiones(
+            API_SESIONES,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    rutinaId: rutina.id,
+                    fecha
+                })
+            }
+        );
 
-        rutinaId: rutina.id,
-        clienteId: rutina.clienteId,
-        nombreCliente: rutina.nombreCliente,
-        nombreRutina: rutina.nombre,
-        fecha: fecha,
-        fechaRegistro: new Date().toISOString()
-    };
+        await cargarSesionesDesdeAPI();
 
-    sesionesEntrenamiento.push(nuevaSesion);
+        alert(
+            resultado.mensaje ||
+            "Entrenamiento registrado correctamente."
+        );
 
-    if (!guardarSesiones()) {
-        sesionesEntrenamiento.pop();
-        return;
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al registrar sesión:",
+            error
+        );
+
+        alert(error.message);
+
+        return false;
     }
-
-    actualizarPanelSeguimiento();
-    alert("Entrenamiento registrado correctamente.");
 }
 
 // ==========================================
 // ELIMINAR REGISTRO
 // ==========================================
 
-function eliminarSesion(id) {
-    if (!confirm(
-        "¿Deseas eliminar este registro del historial?"
-    )) {
-        return;
+async function eliminarSesion(id) {
+    if (
+        !confirm(
+            "¿Deseas eliminar este registro de entrenamiento?"
+        )
+    ) {
+        return false;
     }
 
-    const anteriores = [...sesionesEntrenamiento];
+    try {
+        const resultado = await solicitarAPISesiones(
+            `${API_SESIONES}/${encodeURIComponent(id)}`,
+            {
+                method: "DELETE"
+            }
+        );
 
-    sesionesEntrenamiento = sesionesEntrenamiento.filter(
-        sesion => sesion.id !== id
-    );
+        await cargarSesionesDesdeAPI();
 
-    if (!guardarSesiones()) {
-        sesionesEntrenamiento = anteriores;
-        return;
+        alert(
+            resultado.mensaje ||
+            "Sesión eliminada correctamente."
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al eliminar sesión:",
+            error
+        );
+
+        alert(error.message);
+
+        return false;
     }
-
-    actualizarPanelSeguimiento();
 }
 
 // ==========================================
-// CONSTRUIR ELEMENTOS SEGUROS
+// CREAR ELEMENTOS HTML SEGUROS
 // ==========================================
 
-function crearTexto(etiqueta, contenido, clase = "") {
+function crearTexto(
+    etiqueta,
+    contenido,
+    clase = ""
+) {
     const elemento = document.createElement(etiqueta);
+
     elemento.textContent = contenido;
 
-    if (clase) elemento.className = clase;
+    if (clase) {
+        elemento.className = clase;
+    }
 
     return elemento;
 }
@@ -221,7 +358,10 @@ function crearTexto(etiqueta, contenido, clase = "") {
 // ==========================================
 
 function mostrarPlanSemanal() {
-    const contenedor = document.getElementById("planSemanal");
+    const contenedor = document.getElementById(
+        "planSemanal"
+    );
+
     const selector = document.getElementById(
         "clienteSeguimiento"
     );
@@ -230,12 +370,21 @@ function mostrarPlanSemanal() {
         "semanaSeguimiento"
     );
 
-    const titulo = document.getElementById("tituloSemana");
+    const titulo = document.getElementById(
+        "tituloSemana"
+    );
+
     const contador = document.getElementById(
         "contadorSemana"
     );
 
-    if (!contenedor || !selector || !fechaInput) return;
+    if (
+        !contenedor ||
+        !selector ||
+        !fechaInput
+    ) {
+        return;
+    }
 
     contenedor.replaceChildren();
 
@@ -250,38 +399,53 @@ function mostrarPlanSemanal() {
             )
         );
 
-        titulo.textContent = "Plan semanal";
-        contador.textContent = "0 sesiones completadas";
+        if (titulo) {
+            titulo.textContent = "Plan semanal";
+        }
+
+        if (contador) {
+            contador.textContent =
+                "0 sesiones completadas";
+        }
+
         return;
     }
 
     const inicio = lunesDeSemana(
-        fechaInput.value || fechaISOlocal(new Date())
+        fechaInput.value ||
+        fechaISOlocal(new Date())
     );
 
     const fechaInicio = fechaISOlocal(inicio);
     const fechaFin = agregarDias(inicio, 6);
 
-    titulo.textContent =
-        `Semana: ${fechaLegible(fechaInicio)} - ` +
-        fechaLegible(fechaFin);
+    if (titulo) {
+        titulo.textContent =
+            `Semana: ${fechaLegible(fechaInicio)} - ` +
+            fechaLegible(fechaFin);
+    }
 
-    const rutinasCliente = typeof rutinas !== "undefined"
-        ? rutinas.filter(
-            rutina =>
-                String(rutina.clienteId) === String(clienteId)
-        )
-        : [];
+    const rutinasCliente =
+        typeof rutinas !== "undefined"
+            ? rutinas.filter(
+                rutina =>
+                    String(rutina.clienteId) ===
+                    String(clienteId)
+            )
+            : [];
 
     const sesionesSemana = sesionesEntrenamiento.filter(
         sesion =>
-            String(sesion.clienteId) === String(clienteId) &&
+            String(sesion.clienteId) ===
+                String(clienteId) &&
             sesion.fecha >= fechaInicio &&
             sesion.fecha <= fechaFin
     );
 
-    contador.textContent =
-        `${sesionesSemana.length} sesiones completadas`;
+    if (contador) {
+        contador.textContent =
+            `${sesionesSemana.length} sesiones completadas`;
+    }
 
     diasSeguimiento.forEach((dia, indice) => {
         const fecha = agregarDias(inicio, indice);
@@ -305,7 +469,7 @@ function mostrarPlanSemanal() {
             rutina => rutina.dia === dia
         );
 
-        if (!rutinasDia.length) {
+        if (rutinasDia.length === 0) {
             tarjeta.appendChild(
                 crearTexto(
                     "p",
@@ -333,16 +497,18 @@ function mostrarPlanSemanal() {
             const lista = document.createElement("ul");
             lista.className = "ejercicios-dia";
 
-            (rutina.ejercicios || []).forEach(ejercicio => {
-                lista.appendChild(
-                    crearTexto(
-                        "li",
-                        `${ejercicio.nombre}: ` +
-                        `${ejercicio.series} x ` +
-                        `${ejercicio.repeticiones}`
-                    )
-                );
-            });
+            (rutina.ejercicios || []).forEach(
+                ejercicio => {
+                    lista.appendChild(
+                        crearTexto(
+                            "li",
+                            `${ejercicio.nombre}: ` +
+                            `${ejercicio.series} x ` +
+                            `${ejercicio.repeticiones}`
+                        )
+                    );
+                }
+            );
 
             bloque.appendChild(lista);
 
@@ -365,18 +531,32 @@ function mostrarPlanSemanal() {
 
             if (!completada) {
                 const boton = document.createElement("button");
+
                 boton.type = "button";
                 boton.className = "boton-completar";
                 boton.textContent = "Marcar realizada";
 
                 if (fecha > fechaISOlocal(new Date())) {
                     boton.disabled = true;
-                    boton.title = "Fecha futura";
+                    boton.title =
+                        "No puedes registrar fechas futuras.";
                 }
 
-                boton.addEventListener("click", () => {
-                    registrarSesion(rutina, fecha);
-                });
+                boton.addEventListener(
+                    "click",
+                    async () => {
+                        boton.disabled = true;
+
+                        try {
+                            await registrarSesion(
+                                rutina,
+                                fecha
+                            );
+                        } finally {
+                            boton.disabled = false;
+                        }
+                    }
+                );
 
                 bloque.appendChild(boton);
             }
@@ -389,7 +569,7 @@ function mostrarPlanSemanal() {
 }
 
 // ==========================================
-// HISTORIAL
+// MOSTRAR HISTORIAL
 // ==========================================
 
 function mostrarHistorialEntrenamientos() {
@@ -410,14 +590,20 @@ function mostrarHistorialEntrenamientos() {
     contenedor.replaceChildren();
 
     const filtradas = sesionesEntrenamiento
-        .filter(sesion =>
-            !clienteId ||
-            String(sesion.clienteId) === String(clienteId)
+        .filter(
+            sesion =>
+                !clienteId ||
+                String(sesion.clienteId) ===
+                    String(clienteId)
         )
-        .sort((a, b) => b.fecha.localeCompare(a.fecha));
+        .sort(
+            (a, b) =>
+                b.fecha.localeCompare(a.fecha)
+        );
 
     if (cantidad) {
-        cantidad.textContent = `${filtradas.length} registros`;
+        cantidad.textContent =
+            `${filtradas.length} registros`;
     }
 
     if (!filtradas.length) {
@@ -438,7 +624,10 @@ function mostrarHistorialEntrenamientos() {
         const informacion = document.createElement("div");
 
         informacion.appendChild(
-            crearTexto("strong", sesion.nombreRutina)
+            crearTexto(
+                "strong",
+                sesion.nombreRutina
+            )
         );
 
         informacion.appendChild(
@@ -454,11 +643,18 @@ function mostrarHistorialEntrenamientos() {
         boton.className = "boton-eliminar";
         boton.textContent = "Eliminar";
 
-        boton.addEventListener("click", () => {
-            eliminarSesion(sesion.id);
+        boton.addEventListener("click", async () => {
+            boton.disabled = true;
+
+            try {
+                await eliminarSesion(sesion.id);
+            } finally {
+                boton.disabled = false;
+            }
         });
 
         fila.append(informacion, boton);
+
         contenedor.appendChild(fila);
     });
 }
@@ -471,6 +667,12 @@ function actualizarPanelSeguimiento() {
     actualizarTotalSesiones();
     mostrarPlanSemanal();
     mostrarHistorialEntrenamientos();
+
+    if (
+        typeof actualizarEstadisticas === "function"
+    ) {
+        actualizarEstadisticas();
+    }
 }
 
 // ==========================================
@@ -478,7 +680,7 @@ function actualizarPanelSeguimiento() {
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    const cliente = document.getElementById(
+    const selector = document.getElementById(
         "clienteSeguimiento"
     );
 
@@ -486,13 +688,13 @@ document.addEventListener("DOMContentLoaded", () => {
         "semanaSeguimiento"
     );
 
-    if (!cliente || !semana) return;
+    if (!selector || !semana) return;
 
     semana.value = fechaISOlocal(new Date());
 
     cargarClientesSeguimiento();
 
-    cliente.addEventListener(
+    selector.addEventListener(
         "change",
         actualizarPanelSeguimiento
     );
@@ -502,19 +704,11 @@ document.addEventListener("DOMContentLoaded", () => {
         actualizarPanelSeguimiento
     );
 
-    // Al entrar al módulo, actualizar clientes y rutinas.
     document.querySelector('a[href="#seguimiento"]')
-        ?.addEventListener("click", () => {
+        ?.addEventListener("click", async () => {
             cargarClientesSeguimiento();
-            actualizarPanelSeguimiento();
+            await cargarSesionesDesdeAPI();
         });
 
-    // Actualizar si la pestaña vuelve a estar visible.
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) {
-            actualizarPanelSeguimiento();
-        }
-    });
-
-    actualizarPanelSeguimiento();
+    cargarSesionesDesdeAPI();
 });

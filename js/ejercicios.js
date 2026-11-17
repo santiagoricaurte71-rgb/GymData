@@ -1,163 +1,310 @@
 
 "use strict";
 
+// ==========================================
 // GYMDATA - BIBLIOTECA DE EJERCICIOS
+// CONEXION CON MYSQL
+// ==========================================
 
 let ejercicios = [];
 
-try {
-    const datos = JSON.parse(
-        localStorage.getItem("gymdata_ejercicios")
-    );
+const API_EJERCICIOS = "/api/ejercicios";
 
-    ejercicios = Array.isArray(datos) ? datos : [];
-} catch (error) {
-    console.error("Error al cargar ejercicios:", error);
-}
-
-// GUARDAR EJERCICIOS
-
-function guardarEjercicios() {
-    try {
-        localStorage.setItem(
-            "gymdata_ejercicios",
-            JSON.stringify(ejercicios)
-        );
-        return true;
-    } catch (error) {
-        console.error(error);
-        alert("No fue posible guardar los ejercicios.");
-        return false;
-    }
-}
-
+// ==========================================
 // VALIDACIONES
+// ==========================================
 
 function enteroValido(valor, minimo, maximo) {
     const numero = Number(valor);
 
-    return Number.isInteger(numero) &&
-        numero >= minimo && numero <= maximo;
+    return (
+        Number.isInteger(numero) &&
+        numero >= minimo &&
+        numero <= maximo
+    );
 }
 
 function imagenValida(url) {
     if (!url) return true;
 
     try {
-        return new URL(url).protocol === "https:";
-    } catch {
+        const direccion = new URL(url);
+
+        return direccion.protocol === "https:";
+
+    } catch (error) {
         return false;
     }
 }
 
-function generarIdEjercicio() {
-    return typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Date.now().toString() +
-          Math.random().toString(16).slice(2);
+// ==========================================
+// CONSULTAR LA API
+// ==========================================
+
+async function solicitarAPIEjercicios(
+    url,
+    opciones = {}
+) {
+    let respuesta;
+
+    try {
+        respuesta = await fetch(url, {
+            ...opciones,
+            headers: {
+                "Content-Type": "application/json",
+                ...(opciones.headers || {})
+            }
+        });
+
+    } catch (error) {
+        throw new Error(
+            "No se pudo conectar con el servidor GymData."
+        );
+    }
+
+    let resultado;
+
+    try {
+        resultado = await respuesta.json();
+
+    } catch (error) {
+        throw new Error(
+            "El servidor devolvió una respuesta no válida."
+        );
+    }
+
+    if (!respuesta.ok || resultado.success === false) {
+        throw new Error(
+            resultado.mensaje ||
+            "No fue posible completar la operación."
+        );
+    }
+
+    return resultado;
 }
 
-// REGISTRAR O EDITAR
+// ==========================================
+// ACTUALIZAR SELECTOR DE RUTINAS
+// ==========================================
 
-function guardarFormularioEjercicio() {
-    const id = document.getElementById("ejercicioId").value;
-    const nombre =
-        document.getElementById("nombreEjercicio").value.trim();
-    const grupo =
-        document.getElementById("grupoMuscular").value;
-
-    const series = Number(
-        document.getElementById("seriesEjercicio").value
-    );
-    const repeticiones = Number(
-        document.getElementById("repeticionesEjercicio").value
-    );
-    const descanso = Number(
-        document.getElementById("descansoEjercicio").value
-    );
-
-    const imagen =
-        document.getElementById("imagenEjercicio").value.trim();
-    const descripcion =
-        document.getElementById("descripcionEjercicio").value.trim();
-
-    const grupos = [
-        "Pecho", "Espalda", "Hombros", "Bíceps",
-        "Tríceps", "Cuádriceps", "Femoral", "Glúteos",
-        "Pantorrillas", "Abdomen", "Cuerpo completo", "Cardio"
-    ];
-
-    if (!nombre || !grupos.includes(grupo)) {
-        alert("Completa el nombre y grupo muscular.");
-        return;
-    }
-
-    if (
-        !enteroValido(series, 1, 30) ||
-        !enteroValido(repeticiones, 1, 200) ||
-        !enteroValido(descanso, 0, 1800)
-    ) {
-        alert("Revisa series, repeticiones y descanso.");
-        return;
-    }
-
-    if (!imagenValida(imagen)) {
-        alert("La imagen debe tener una URL HTTPS válida.");
-        return;
-    }
-
-    const nuevo = {
-        id: id || generarIdEjercicio(),
-        nombre,
-        grupo,
-        series,
-        repeticiones,
-        descanso,
-        imagen,
-        descripcion
-    };
-
-    const anteriores = [...ejercicios];
-
-    if (id) {
-        const posicion = ejercicios.findIndex(e => e.id === id);
-
-        if (posicion === -1) {
-            alert("No se encontró el ejercicio.");
-            return;
-        }
-
-        ejercicios[posicion] = nuevo;
-    } else {
-        ejercicios.push(nuevo);
-    }
-
-    if (!guardarEjercicios()) {
-        ejercicios = anteriores;
-        return;
-    }
-
-    mostrarEjercicios();
-    limpiarFormularioEjercicio();
-
+function actualizarSelectorRutinas() {
     if (typeof cargarEjerciciosRutina === "function") {
         cargarEjerciciosRutina();
     }
-
-    alert(id
-        ? "Ejercicio actualizado correctamente."
-        : "Ejercicio registrado correctamente."
-    );
 }
 
+// ==========================================
+// CARGAR EJERCICIOS DESDE MYSQL
+// ==========================================
+
+async function cargarEjerciciosDesdeAPI() {
+    try {
+        const resultado = await solicitarAPIEjercicios(
+            API_EJERCICIOS
+        );
+
+        if (!Array.isArray(resultado.data)) {
+            throw new Error(
+                "El servidor no devolvió una lista válida."
+            );
+        }
+
+        ejercicios = resultado.data;
+
+        mostrarEjercicios();
+        actualizarSelectorRutinas();
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al consultar ejercicios:",
+            error
+        );
+
+        const contenedor = document.getElementById(
+            "listaEjercicios"
+        );
+
+        if (contenedor) {
+            contenedor.replaceChildren();
+
+            const mensaje = document.createElement("p");
+            mensaje.className = "mensaje-vacio";
+            mensaje.textContent = error.message;
+
+            contenedor.appendChild(mensaje);
+        }
+
+        return false;
+    }
+}
+
+// ==========================================
+// LEER EL FORMULARIO
+// ==========================================
+
+function obtenerDatosFormularioEjercicio() {
+    const id = document.getElementById(
+        "ejercicioId"
+    ).value;
+
+    const nombre = document.getElementById(
+        "nombreEjercicio"
+    ).value.trim();
+
+    const grupo = document.getElementById(
+        "grupoMuscular"
+    ).value;
+
+    const seriesTexto = document.getElementById(
+        "seriesEjercicio"
+    ).value;
+
+    const repeticionesTexto = document.getElementById(
+        "repeticionesEjercicio"
+    ).value;
+
+    const descansoTexto = document.getElementById(
+        "descansoEjercicio"
+    ).value;
+
+    const imagen = document.getElementById(
+        "imagenEjercicio"
+    ).value.trim();
+
+    const descripcion = document.getElementById(
+        "descripcionEjercicio"
+    ).value.trim();
+
+    if (
+        !nombre ||
+        nombre.length > 100 ||
+        !grupo
+    ) {
+        throw new Error(
+            "Ingresa el nombre y grupo muscular."
+        );
+    }
+
+    if (
+        seriesTexto === "" ||
+        repeticionesTexto === "" ||
+        descansoTexto === "" ||
+        !enteroValido(seriesTexto, 1, 30) ||
+        !enteroValido(repeticionesTexto, 1, 200) ||
+        !enteroValido(descansoTexto, 0, 1800)
+    ) {
+        throw new Error(
+            "Revisa las series, repeticiones y descanso."
+        );
+    }
+
+    if (!imagenValida(imagen)) {
+        throw new Error(
+            "La imagen debe tener una URL HTTPS válida."
+        );
+    }
+
+    return {
+        id,
+        nombre,
+        grupo,
+        series: Number(seriesTexto),
+        repeticiones: Number(repeticionesTexto),
+        descanso: Number(descansoTexto),
+        imagen,
+        descripcion
+    };
+}
+
+// ==========================================
+// GUARDAR O ACTUALIZAR EJERCICIO
+// ==========================================
+
+async function guardarFormularioEjercicio() {
+    let datos;
+
+    try {
+        datos = obtenerDatosFormularioEjercicio();
+
+    } catch (error) {
+        alert(error.message);
+        return false;
+    }
+
+    const editando = Boolean(datos.id);
+
+    const url = editando
+        ? `${API_EJERCICIOS}/${encodeURIComponent(datos.id)}`
+        : API_EJERCICIOS;
+
+    const metodo = editando ? "PUT" : "POST";
+
+    try {
+        const resultado = await solicitarAPIEjercicios(
+            url,
+            {
+                method: metodo,
+                body: JSON.stringify({
+                    nombre: datos.nombre,
+                    grupo: datos.grupo,
+                    series: datos.series,
+                    repeticiones: datos.repeticiones,
+                    descanso: datos.descanso,
+                    imagen: datos.imagen,
+                    descripcion: datos.descripcion
+                })
+            }
+        );
+
+        const actualizado = await cargarEjerciciosDesdeAPI();
+
+        if (!actualizado) {
+            alert(
+                "El cambio se guardó en MySQL, pero " +
+                "no fue posible actualizar la lista. " +
+                "Recarga la página."
+            );
+            return true;
+        }
+
+        limpiarFormularioEjercicio();
+
+        alert(
+            resultado.mensaje ||
+            "Ejercicio guardado correctamente."
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(error);
+        alert(error.message);
+        return false;
+    }
+}
+
+// ==========================================
 // MOSTRAR EJERCICIOS
+// ==========================================
 
 function mostrarEjercicios() {
-    const contenedor = document.getElementById("listaEjercicios");
-    const total = document.getElementById("totalEjercicios");
-    const cantidad = document.getElementById("cantidadEjercicios");
+    const contenedor = document.getElementById(
+        "listaEjercicios"
+    );
 
-    if (total) total.textContent = ejercicios.length;
+    const contador = document.getElementById(
+        "totalEjercicios"
+    );
+
+    const cantidad = document.getElementById(
+        "cantidadEjercicios"
+    );
+
+    if (contador) {
+        contador.textContent = ejercicios.length;
+    }
 
     if (cantidad) {
         cantidad.textContent = ejercicios.length === 1
@@ -167,70 +314,103 @@ function mostrarEjercicios() {
 
     if (!contenedor) return;
 
-    const busqueda = document.getElementById("buscarEjercicio")
-        ?.value.trim().toLocaleLowerCase("es") || "";
+    const busqueda = document.getElementById(
+        "buscarEjercicio"
+    )?.value.trim().toLocaleLowerCase("es") || "";
 
-    const filtro = document.getElementById("filtrarGrupoMuscular")
-        ?.value || "";
+    const filtro = document.getElementById(
+        "filtrarGrupoMuscular"
+    )?.value || "";
 
-    const filtrados = ejercicios.filter(e =>
-        e.nombre.toLocaleLowerCase("es").includes(busqueda) &&
-        (!filtro || e.grupo === filtro)
-    );
+    const filtrados = ejercicios.filter(item => {
+        const coincideNombre = item.nombre
+            .toLocaleLowerCase("es")
+            .includes(busqueda);
+
+        const coincideGrupo =
+            !filtro || item.grupo === filtro;
+
+        return coincideNombre && coincideGrupo;
+    });
 
     contenedor.replaceChildren();
 
-    if (!filtrados.length) {
-        const p = document.createElement("p");
-        p.className = "mensaje-vacio";
-        p.textContent = ejercicios.length
-            ? "No se encontraron ejercicios."
-            : "Todavía no hay ejercicios registrados.";
-        contenedor.appendChild(p);
+    if (filtrados.length === 0) {
+        const mensaje = document.createElement("p");
+
+        mensaje.className = "mensaje-vacio";
+
+        mensaje.textContent = ejercicios.length === 0
+            ? "No hay ejercicios registrados en MySQL."
+            : "No se encontraron ejercicios.";
+
+        contenedor.appendChild(mensaje);
         return;
     }
 
-    filtrados.forEach(e => {
+    filtrados.forEach(item => {
         const tarjeta = document.createElement("article");
-        tarjeta.className = "tarjeta-cliente tarjeta-ejercicio";
 
-        if (e.imagen && imagenValida(e.imagen)) {
+        tarjeta.className =
+            "tarjeta-cliente tarjeta-ejercicio";
+
+        // Imagen
+        if (item.imagen && imagenValida(item.imagen)) {
             const imagen = document.createElement("img");
-            imagen.src = e.imagen;
-            imagen.alt = e.nombre;
+
+            imagen.src = item.imagen;
+            imagen.alt = "Ejercicio: " + item.nombre;
             imagen.loading = "lazy";
             imagen.referrerPolicy = "no-referrer";
             imagen.className = "imagen-ejercicio";
+
             tarjeta.appendChild(imagen);
+
         } else {
             const placeholder = document.createElement("div");
+
             placeholder.className = "imagen-placeholder";
             placeholder.textContent = "GYMDATA · FITNESS";
+
             tarjeta.appendChild(placeholder);
         }
 
+        // Nombre
         const titulo = document.createElement("h3");
-        titulo.textContent = e.nombre;
+        titulo.textContent = item.nombre;
 
+        // Grupo muscular
         const grupo = document.createElement("span");
         grupo.className = "etiqueta-muscular";
-        grupo.textContent = e.grupo;
+        grupo.textContent = item.grupo;
 
+        // Series y repeticiones
         const detalle = document.createElement("p");
         detalle.textContent =
-            `${e.series} series · ${e.repeticiones} repeticiones`;
+            `${item.series} series · ` +
+            `${item.repeticiones} repeticiones`;
 
+        // Descanso
         const descanso = document.createElement("p");
-        descanso.textContent = `Descanso: ${e.descanso} segundos`;
+        descanso.textContent =
+            `Descanso: ${item.descanso} segundos`;
 
-        tarjeta.append(titulo, grupo, detalle, descanso);
+        tarjeta.append(
+            titulo,
+            grupo,
+            detalle,
+            descanso
+        );
 
-        if (e.descripcion) {
+        // Indicaciones
+        if (item.descripcion) {
             const descripcion = document.createElement("p");
-            descripcion.textContent = e.descripcion;
+            descripcion.textContent = item.descripcion;
+
             tarjeta.appendChild(descripcion);
         }
 
+        // Botones
         const acciones = document.createElement("div");
         acciones.className = "acciones-tarjeta";
 
@@ -238,110 +418,230 @@ function mostrarEjercicios() {
         editar.type = "button";
         editar.className = "boton-editar";
         editar.textContent = "Editar";
-        editar.addEventListener("click", () => editarEjercicio(e.id));
+
+        editar.addEventListener("click", () => {
+            editarEjercicio(item.id);
+        });
 
         const eliminar = document.createElement("button");
         eliminar.type = "button";
         eliminar.className = "boton-eliminar";
         eliminar.textContent = "Eliminar";
-        eliminar.addEventListener("click", () => eliminarEjercicio(e.id));
+
+        eliminar.addEventListener("click", async () => {
+            eliminar.disabled = true;
+
+            try {
+                await eliminarEjercicio(item.id);
+            } finally {
+                eliminar.disabled = false;
+            }
+        });
 
         acciones.append(editar, eliminar);
+
         tarjeta.appendChild(acciones);
+
         contenedor.appendChild(tarjeta);
     });
 }
 
-// EDITAR
+// ==========================================
+// EDITAR EJERCICIO
+// ==========================================
 
 function editarEjercicio(id) {
-    const e = ejercicios.find(item => item.id === id);
-    if (!e) return;
+    const item = ejercicios.find(
+        ejercicio => ejercicio.id === id
+    );
 
-    document.getElementById("ejercicioId").value = e.id;
-    document.getElementById("nombreEjercicio").value = e.nombre;
-    document.getElementById("grupoMuscular").value = e.grupo;
-    document.getElementById("seriesEjercicio").value = e.series;
-    document.getElementById("repeticionesEjercicio").value = e.repeticiones;
-    document.getElementById("descansoEjercicio").value = e.descanso;
-    document.getElementById("imagenEjercicio").value = e.imagen || "";
-    document.getElementById("descripcionEjercicio").value =
-        e.descripcion || "";
-
-    document.getElementById("botonGuardarEjercicio").textContent =
-        "GUARDAR CAMBIOS";
-
-    document.getElementById("cancelarEdicionEjercicio")
-        .classList.remove("oculto");
-
-    document.getElementById("formularioEjercicio")
-        .scrollIntoView({ behavior: "smooth" });
-}
-
-// ELIMINAR
-
-function eliminarEjercicio(id) {
-    if (!confirm("¿Eliminar este ejercicio?")) return;
-
-    const anteriores = [...ejercicios];
-    ejercicios = ejercicios.filter(e => e.id !== id);
-
-    if (!guardarEjercicios()) {
-        ejercicios = anteriores;
+    if (!item) {
+        alert("Ejercicio no encontrado.");
         return;
     }
 
-    if (document.getElementById("ejercicioId").value === id) {
-        limpiarFormularioEjercicio();
-    }
+    document.getElementById("ejercicioId").value =
+        item.id;
 
-    mostrarEjercicios();
+    document.getElementById("nombreEjercicio").value =
+        item.nombre;
 
-    if (typeof cargarEjerciciosRutina === "function") {
-        cargarEjerciciosRutina();
-    }
+    document.getElementById("grupoMuscular").value =
+        item.grupo;
 
-    alert("Ejercicio eliminado correctamente.");
+    document.getElementById("seriesEjercicio").value =
+        item.series;
+
+    document.getElementById("repeticionesEjercicio").value =
+        item.repeticiones;
+
+    document.getElementById("descansoEjercicio").value =
+        item.descanso;
+
+    document.getElementById("imagenEjercicio").value =
+        item.imagen || "";
+
+    document.getElementById("descripcionEjercicio").value =
+        item.descripcion || "";
+
+    document.getElementById(
+        "botonGuardarEjercicio"
+    ).textContent = "GUARDAR CAMBIOS";
+
+    document.getElementById(
+        "cancelarEdicionEjercicio"
+    ).classList.remove("oculto");
+
+    document.getElementById(
+        "formularioEjercicio"
+    ).scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
 }
 
-// LIMPIAR
+// ==========================================
+// ELIMINAR EJERCICIO
+// ==========================================
+
+async function eliminarEjercicio(id) {
+    // Las rutinas locales conservan copias
+    // de sus ejercicios, pero advertimos
+    // antes de eliminar del catalogo.
+
+    const utilizadoEnRutinas =
+        typeof rutinas !== "undefined" &&
+        rutinas.some(rutina =>
+            Array.isArray(rutina.ejercicios) &&
+            rutina.ejercicios.some(e =>
+                String(e.id) === String(id)
+            )
+        );
+
+    const mensaje = utilizadoEnRutinas
+        ? "Este ejercicio aparece en rutinas locales. " +
+          "Las rutinas conservarán su información anterior. " +
+          "¿Deseas eliminarlo de la biblioteca?"
+        : "¿Deseas eliminar este ejercicio?";
+
+    if (!confirm(mensaje)) {
+        return false;
+    }
+
+    try {
+        const resultado = await solicitarAPIEjercicios(
+            `${API_EJERCICIOS}/${encodeURIComponent(id)}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+        if (
+            document.getElementById("ejercicioId").value === id
+        ) {
+            limpiarFormularioEjercicio();
+        }
+
+        const actualizado = await cargarEjerciciosDesdeAPI();
+
+        alert(
+            actualizado
+                ? resultado.mensaje
+                : "Ejercicio eliminado. Recarga la página " +
+                  "para actualizar la biblioteca."
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(error);
+        alert(error.message);
+        return false;
+    }
+}
+
+// ==========================================
+// LIMPIAR FORMULARIO
+// ==========================================
 
 function limpiarFormularioEjercicio() {
-    const formulario = document.getElementById("formularioEjercicio");
-    formulario.reset();
-
-    document.getElementById("ejercicioId").value = "";
-    document.getElementById("seriesEjercicio").value = 3;
-    document.getElementById("repeticionesEjercicio").value = 12;
-    document.getElementById("descansoEjercicio").value = 60;
-
-    document.getElementById("botonGuardarEjercicio").textContent =
-        "+ GUARDAR EJERCICIO";
-
-    document.getElementById("cancelarEdicionEjercicio")
-        .classList.add("oculto");
-}
-
-// INICIALIZAR
-
-document.addEventListener("DOMContentLoaded", () => {
-    const formulario = document.getElementById("formularioEjercicio");
+    const formulario = document.getElementById(
+        "formularioEjercicio"
+    );
 
     if (!formulario) return;
 
-    formulario.addEventListener("submit", evento => {
-        evento.preventDefault();
-        guardarFormularioEjercicio();
-    });
+    formulario.reset();
 
-    document.getElementById("buscarEjercicio")
-        .addEventListener("input", mostrarEjercicios);
+    document.getElementById("ejercicioId").value = "";
 
-    document.getElementById("filtrarGrupoMuscular")
-        .addEventListener("change", mostrarEjercicios);
+    document.getElementById("seriesEjercicio").value = 3;
 
-    document.getElementById("cancelarEdicionEjercicio")
-        .addEventListener("click", limpiarFormularioEjercicio);
+    document.getElementById(
+        "repeticionesEjercicio"
+    ).value = 12;
 
-    mostrarEjercicios();
+    document.getElementById("descansoEjercicio").value = 60;
+
+    document.getElementById(
+        "botonGuardarEjercicio"
+    ).textContent = "+ GUARDAR EJERCICIO";
+
+    document.getElementById(
+        "cancelarEdicionEjercicio"
+    ).classList.add("oculto");
+}
+
+// ==========================================
+// INICIALIZAR
+// ==========================================
+
+document.addEventListener("DOMContentLoaded", () => {
+    const formulario = document.getElementById(
+        "formularioEjercicio"
+    );
+
+    if (!formulario) return;
+
+    formulario.addEventListener(
+        "submit",
+        async evento => {
+            evento.preventDefault();
+
+            const boton = document.getElementById(
+                "botonGuardarEjercicio"
+            );
+
+            boton.disabled = true;
+
+            try {
+                await guardarFormularioEjercicio();
+            } finally {
+                boton.disabled = false;
+            }
+        }
+    );
+
+    document.getElementById(
+        "buscarEjercicio"
+    ).addEventListener(
+        "input",
+        mostrarEjercicios
+    );
+
+    document.getElementById(
+        "filtrarGrupoMuscular"
+    ).addEventListener(
+        "change",
+        mostrarEjercicios
+    );
+
+    document.getElementById(
+        "cancelarEdicionEjercicio"
+    ).addEventListener(
+        "click",
+        limpiarFormularioEjercicio
+    );
+
+    cargarEjerciciosDesdeAPI();
 });

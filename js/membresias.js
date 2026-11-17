@@ -1,43 +1,21 @@
 
 "use strict";
 
+// ==========================================
 // GYMDATA - GESTION DE MEMBRESIAS
+// CONEXION CON MYSQL
+// ==========================================
+
+// Las membresias ahora se consultan desde MySQL.
+// No eliminamos los registros antiguos de localStorage.
 
 let membresias = [];
 
-try {
-    const datos = JSON.parse(
-        localStorage.getItem("gymdata_membresias")
-    );
+const API_MEMBRESIAS = "/api/membresias";
 
-    membresias = Array.isArray(datos) ? datos : [];
-} catch (error) {
-    console.error("Error al cargar membresías:", error);
-}
-
-const planesMembresia = {
-    Mensual: 30,
-    Trimestral: 90,
-    Semestral: 180
-};
-
-// GUARDAR
-
-function guardarMembresias() {
-    try {
-        localStorage.setItem(
-            "gymdata_membresias",
-            JSON.stringify(membresias)
-        );
-        return true;
-    } catch (error) {
-        console.error(error);
-        alert("No fue posible guardar la membresía.");
-        return false;
-    }
-}
-
+// ==========================================
 // FECHAS
+// ==========================================
 
 function fechaLocal(fecha) {
     const anio = fecha.getFullYear();
@@ -47,133 +25,319 @@ function fechaLocal(fecha) {
     return `${anio}-${mes}-${dia}`;
 }
 
-function calcularVencimiento(inicio, duracion) {
-    const [anio, mes, dia] = inicio.split("-").map(Number);
-    const fecha = new Date(anio, mes - 1, dia);
+function formatearFecha(fecha) {
+    if (!fecha) return "-";
 
-    if (
-        fecha.getFullYear() !== anio ||
-        fecha.getMonth() !== mes - 1 ||
-        fecha.getDate() !== dia
-    ) {
-        return null;
+    const partes = fecha.slice(0, 10).split("-");
+
+    if (partes.length !== 3) return "-";
+
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+function obtenerEstado(fechaVencimiento, fechaInicio) {
+    const hoy = fechaLocal(new Date());
+
+    if (fechaVencimiento < hoy) {
+        return "Vencida";
     }
 
-    fecha.setDate(fecha.getDate() + duracion);
-    return fechaLocal(fecha);
+    if (fechaInicio && fechaInicio > hoy) {
+        return "Programada";
+    }
+
+    return "Activa";
 }
 
-function formatearFecha(fecha) {
-    if (!fecha) return "";
-    const [anio, mes, dia] = fecha.split("-");
-    return `${dia}/${mes}/${anio}`;
+// ==========================================
+// CREAR SELECTOR DE METODO DE PAGO
+// ==========================================
+
+function crearSelectorMetodoPago() {
+    const formulario = document.getElementById(
+        "formularioMembresia"
+    );
+
+    if (!formulario) return;
+
+    // Evitar duplicar el campo.
+    if (document.getElementById("metodoPagoMembresia")) {
+        return;
+    }
+
+    const grupo = document.createElement("div");
+    grupo.className = "grupo-formulario";
+
+    const etiqueta = document.createElement("label");
+    etiqueta.htmlFor = "metodoPagoMembresia";
+    etiqueta.textContent = "Método de pago";
+
+    const selector = document.createElement("select");
+    selector.id = "metodoPagoMembresia";
+    selector.required = true;
+
+    const opciones = [
+        { valor: "", texto: "Selecciona el método de pago" },
+        { valor: "Nequi", texto: "Nequi" },
+        { valor: "Tarjeta", texto: "Tarjeta" }
+    ];
+
+    opciones.forEach(item => {
+        const opcion = document.createElement("option");
+        opcion.value = item.valor;
+        opcion.textContent = item.texto;
+
+        selector.appendChild(opcion);
+    });
+
+    grupo.append(etiqueta, selector);
+
+    const boton = formulario.querySelector(
+        'button[type="submit"]'
+    );
+
+    formulario.insertBefore(grupo, boton);
 }
 
-function obtenerEstado(vencimiento) {
-    return vencimiento < fechaLocal(new Date())
-        ? "Vencida"
-        : "Activa";
+// ==========================================
+// COMUNICACION CON API
+// ==========================================
+
+async function solicitarAPIMembresias(
+    url,
+    opciones = {}
+) {
+    let respuesta;
+
+    try {
+        respuesta = await fetch(url, {
+            ...opciones,
+            headers: {
+                "Content-Type": "application/json",
+                ...(opciones.headers || {})
+            }
+        });
+    } catch (error) {
+        throw new Error(
+            "No fue posible conectar con GymData. " +
+            "Comprueba que el servidor esté funcionando."
+        );
+    }
+
+    let resultado;
+
+    try {
+        resultado = await respuesta.json();
+    } catch (error) {
+        throw new Error(
+            "El servidor no devolvió una respuesta válida."
+        );
+    }
+
+    if (!respuesta.ok || resultado.success === false) {
+        throw new Error(
+            resultado.mensaje ||
+            "Ocurrió un error con la membresía."
+        );
+    }
+
+    return resultado;
 }
 
-// SELECTOR DE CLIENTES
+// ==========================================
+// CARGAR CLIENTES EN EL SELECTOR
+// ==========================================
 
 function cargarClientesMembresia() {
-    const selector = document.getElementById("clienteMembresia");
+    const selector = document.getElementById(
+        "clienteMembresia"
+    );
+
     if (!selector) return;
 
-    const anterior = selector.value;
+    const seleccionAnterior = selector.value;
+
     selector.replaceChildren();
 
     const inicial = document.createElement("option");
     inicial.value = "";
     inicial.textContent = "Selecciona un cliente";
+
     selector.appendChild(inicial);
+
+    if (typeof clientes === "undefined") {
+        return;
+    }
 
     clientes.forEach(cliente => {
         const opcion = document.createElement("option");
+
         opcion.value = cliente.id;
         opcion.textContent = cliente.nombre;
+
         selector.appendChild(opcion);
     });
 
-    if (clientes.some(c => String(c.id) === anterior)) {
-        selector.value = anterior;
+    const existe = clientes.some(
+        cliente =>
+            String(cliente.id) === seleccionAnterior
+    );
+
+    if (existe) {
+        selector.value = seleccionAnterior;
     }
 }
 
+// ==========================================
+// CONSULTAR MEMBRESIAS DESDE MYSQL
+// ==========================================
+
+async function cargarMembresiasDesdeAPI() {
+    try {
+        const resultado = await solicitarAPIMembresias(
+            API_MEMBRESIAS
+        );
+
+        if (!Array.isArray(resultado.data)) {
+            throw new Error(
+                "La API no devolvió una lista válida."
+            );
+        }
+
+        membresias = resultado.data;
+
+        mostrarMembresias();
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al consultar membresías:",
+            error
+        );
+
+        const contenedor = document.getElementById(
+            "listaMembresias"
+        );
+
+        if (contenedor) {
+            contenedor.replaceChildren();
+
+            const mensaje = document.createElement("p");
+            mensaje.className = "mensaje-vacio";
+            mensaje.textContent = error.message;
+
+            contenedor.appendChild(mensaje);
+        }
+
+        return false;
+    }
+}
+
+// ==========================================
 // REGISTRAR MEMBRESIA
+// ==========================================
 
-function registrarMembresia(clienteId, plan, inicio) {
-    const cliente = clientes.find(
-        c => String(c.id) === String(clienteId)
-    );
-
-    if (!cliente || !planesMembresia[plan] || !inicio) {
-        alert("Completa correctamente los datos.");
+async function registrarMembresia(
+    clienteId,
+    plan,
+    fechaInicio,
+    metodoPago
+) {
+    if (
+        !clienteId ||
+        !plan ||
+        !fechaInicio ||
+        !metodoPago
+    ) {
+        alert("Completa todos los campos.");
         return false;
     }
 
-    const vencimiento = calcularVencimiento(
-        inicio,
-        planesMembresia[plan]
-    );
-
-    if (!vencimiento) {
-        alert("La fecha de inicio no es válida.");
+    if (!["Nequi", "Tarjeta"].includes(metodoPago)) {
+        alert("Selecciona un método de pago válido.");
         return false;
     }
 
-    const tieneActiva = membresias.some(m =>
-        String(m.clienteId) === String(clienteId) &&
-        obtenerEstado(m.fechaVencimiento) === "Activa"
-    );
+    try {
+        const resultado = await solicitarAPIMembresias(
+            API_MEMBRESIAS,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    clienteId,
+                    plan,
+                    fechaInicio,
+                    metodoPago
+                })
+            }
+        );
 
-    if (tieneActiva) {
-        alert("Este cliente ya tiene una membresía activa.");
+        await cargarMembresiasDesdeAPI();
+
+        alert(
+            resultado.mensaje ||
+            "Membresía registrada correctamente."
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "Error al registrar membresía:",
+            error
+        );
+
+        alert(error.message);
+
         return false;
     }
-
-    const nueva = {
-        id: Date.now().toString() +
-            Math.random().toString(16).slice(2),
-        clienteId: cliente.id,
-        nombreCliente: cliente.nombre,
-        plan,
-        fechaInicio: inicio,
-        fechaVencimiento: vencimiento
-    };
-
-    membresias.push(nueva);
-
-    if (!guardarMembresias()) {
-        membresias.pop();
-        return false;
-    }
-
-    mostrarMembresias();
-    alert("Membresía registrada correctamente.");
-    return true;
 }
 
+// ==========================================
 // MOSTRAR MEMBRESIAS
+// ==========================================
 
 function mostrarMembresias() {
-    const contenedor = document.getElementById("listaMembresias");
-
-    const activas = membresias.filter(m =>
-        obtenerEstado(m.fechaVencimiento) === "Activa"
+    const contenedor = document.getElementById(
+        "listaMembresias"
     );
 
-    const vencidas = membresias.filter(m =>
-        obtenerEstado(m.fechaVencimiento) === "Vencida"
+    const contadorActivas = document.getElementById(
+        "membresiasActivas"
     );
 
-    const totalActivas = document.getElementById("membresiasActivas");
-    const totalVencidas = document.getElementById("membresiasVencidas");
-    const cantidad = document.getElementById("cantidadMembresias");
+    const contadorVencidas = document.getElementById(
+        "membresiasVencidas"
+    );
 
-    if (totalActivas) totalActivas.textContent = activas.length;
-    if (totalVencidas) totalVencidas.textContent = vencidas.length;
+    const cantidad = document.getElementById(
+        "cantidadMembresias"
+    );
+
+    const activas = membresias.filter(
+        item =>
+            obtenerEstado(
+                item.fechaVencimiento,
+                item.fechaInicio
+            ) === "Activa"
+    );
+
+    const vencidas = membresias.filter(
+        item =>
+            obtenerEstado(
+                item.fechaVencimiento,
+                item.fechaInicio
+            ) === "Vencida"
+    );
+
+    if (contadorActivas) {
+        contadorActivas.textContent = activas.length;
+    }
+
+    if (contadorVencidas) {
+        contadorVencidas.textContent = vencidas.length;
+    }
 
     if (cantidad) {
         cantidad.textContent = membresias.length === 1
@@ -182,40 +346,65 @@ function mostrarMembresias() {
     }
 
     if (!contenedor) return;
+
     contenedor.replaceChildren();
 
-    if (!membresias.length) {
-        const p = document.createElement("p");
-        p.className = "mensaje-vacio";
-        p.textContent = "No hay membresías registradas todavía.";
-        contenedor.appendChild(p);
+    if (membresias.length === 0) {
+        const mensaje = document.createElement("p");
+
+        mensaje.className = "mensaje-vacio";
+        mensaje.textContent =
+            "No hay membresías registradas en MySQL.";
+
+        contenedor.appendChild(mensaje);
         return;
     }
 
-    membresias.forEach(m => {
-        const estado = obtenerEstado(m.fechaVencimiento);
+    membresias.forEach(membresia => {
+        const estado = obtenerEstado(
+            membresia.fechaVencimiento,
+            membresia.fechaInicio
+        );
 
         const tarjeta = document.createElement("article");
-        tarjeta.className = "tarjeta-cliente tarjeta-membresia";
+        tarjeta.className =
+            "tarjeta-cliente tarjeta-membresia";
 
         const titulo = document.createElement("h3");
-        titulo.textContent = m.nombreCliente;
+        titulo.textContent = membresia.nombreCliente;
 
         const plan = document.createElement("p");
-        plan.textContent = "Plan: " + m.plan;
+        plan.textContent =
+            "Plan: " + membresia.plan;
 
         const inicio = document.createElement("p");
         inicio.textContent =
-            "Inicio: " + formatearFecha(m.fechaInicio);
+            "Inicio: " +
+            formatearFecha(membresia.fechaInicio);
 
         const vencimiento = document.createElement("p");
         vencimiento.textContent =
-            "Vencimiento: " + formatearFecha(m.fechaVencimiento);
+            "Vencimiento: " +
+            formatearFecha(membresia.fechaVencimiento);
+
+        const pago = document.createElement("p");
+        pago.textContent =
+            "Método de pago: " +
+            (membresia.metodoPago || "Sin registrar");
 
         const etiqueta = document.createElement("span");
-        etiqueta.className = estado === "Activa"
-            ? "estado-membresia estado-activa"
-            : "estado-membresia estado-vencida";
+        etiqueta.className = "estado-membresia";
+
+        if (estado === "Activa") {
+            etiqueta.classList.add("estado-activa");
+
+        } else if (estado === "Vencida") {
+            etiqueta.classList.add("estado-vencida");
+
+        } else {
+            etiqueta.classList.add("estado-pendiente");
+        }
+
         etiqueta.textContent = estado;
 
         const boton = document.createElement("button");
@@ -223,58 +412,124 @@ function mostrarMembresias() {
         boton.className = "boton-eliminar";
         boton.textContent = "Eliminar membresía";
 
-        boton.addEventListener("click", () => {
-            eliminarMembresia(m.id);
+        boton.addEventListener("click", async () => {
+            boton.disabled = true;
+
+            try {
+                await eliminarMembresia(membresia.id);
+            } finally {
+                boton.disabled = false;
+            }
         });
 
         tarjeta.append(
-            titulo, plan, inicio, vencimiento, etiqueta, boton
+            titulo,
+            plan,
+            inicio,
+            vencimiento,
+            pago,
+            etiqueta,
+            boton
         );
+
         contenedor.appendChild(tarjeta);
     });
 }
 
-// ELIMINAR
+// ==========================================
+// ELIMINAR MEMBRESIA
+// ==========================================
 
-function eliminarMembresia(id) {
-    if (!confirm("¿Eliminar esta membresía?")) return;
-
-    const anteriores = [...membresias];
-    membresias = membresias.filter(m => m.id !== id);
-
-    if (!guardarMembresias()) {
-        membresias = anteriores;
-        return;
+async function eliminarMembresia(id) {
+    if (!confirm("¿Deseas eliminar esta membresía?")) {
+        return false;
     }
 
-    mostrarMembresias();
-    alert("Membresía eliminada correctamente.");
+    try {
+        await solicitarAPIMembresias(
+            `${API_MEMBRESIAS}/${encodeURIComponent(id)}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+        await cargarMembresiasDesdeAPI();
+
+        alert("Membresía eliminada correctamente.");
+
+        return true;
+
+    } catch (error) {
+        console.error(error);
+        alert(error.message);
+        return false;
+    }
 }
 
+// ==========================================
 // INICIALIZAR
+// ==========================================
 
 document.addEventListener("DOMContentLoaded", () => {
-    const formulario = document.getElementById("formularioMembresia");
-    const fecha = document.getElementById("fechaInicio");
+    const formulario = document.getElementById(
+        "formularioMembresia"
+    );
 
-    if (fecha) fecha.value = fechaLocal(new Date());
+    const fechaInput = document.getElementById(
+        "fechaInicio"
+    );
+
+    if (!formulario || !fechaInput) return;
+
+    crearSelectorMetodoPago();
+
+    fechaInput.value = fechaLocal(new Date());
 
     cargarClientesMembresia();
-    mostrarMembresias();
+    cargarMembresiasDesdeAPI();
 
-    if (!formulario || !fecha) return;
+    formulario.addEventListener(
+        "submit",
+        async evento => {
 
-    formulario.addEventListener("submit", evento => {
-        evento.preventDefault();
+            evento.preventDefault();
 
-        const clienteId =
-            document.getElementById("clienteMembresia").value;
-        const plan =
-            document.getElementById("planMembresia").value;
+            const boton = formulario.querySelector(
+                'button[type="submit"]'
+            );
 
-        if (registrarMembresia(clienteId, plan, fecha.value)) {
-            formulario.reset();
-            fecha.value = fechaLocal(new Date());
+            if (boton) boton.disabled = true;
+
+            const clienteId = document.getElementById(
+                "clienteMembresia"
+            ).value;
+
+            const plan = document.getElementById(
+                "planMembresia"
+            ).value;
+
+            const inicio = fechaInput.value;
+
+            const metodoPago = document.getElementById(
+                "metodoPagoMembresia"
+            ).value;
+
+            try {
+                const registrado = await registrarMembresia(
+                    clienteId,
+                    plan,
+                    inicio,
+                    metodoPago
+                );
+
+                if (registrado) {
+                    formulario.reset();
+                    fechaInput.value = fechaLocal(new Date());
+                }
+
+            } finally {
+                if (boton) boton.disabled = false;
+            }
         }
-    });
+    );
 });
