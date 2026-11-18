@@ -9,6 +9,7 @@
 const express = require("express");
 const path = require("path");
 const session = require("express-session");
+const GymDataSessionStore = require("./src/auth/sessionStore");
 
 // ==========================================
 // VARIABLES DE ENTORNO
@@ -101,22 +102,13 @@ if (
     process.exit(1);
 }
 
-// El almacenamiento temporal de express-session
-// solo se permite durante el desarrollo local.
-if (ES_PRODUCCION) {
-    console.error(
-        "ERROR: Antes de publicar GymData, " +
-        "configura sesiones persistentes y HTTPS."
-    );
-
-    process.exit(1);
-}
 
 // ==========================================
 // CONFIGURACION GENERAL
 // ==========================================
 
 app.disable("x-powered-by");
+app.set("trust proxy", "loopback");
 
 app.use(express.json({
     limit: "100kb"
@@ -127,6 +119,7 @@ app.use(express.json({
 // ==========================================
 
 app.use(session({
+    store: new GymDataSessionStore(),
     name: "gymdata.sid",
 
     secret: process.env.SESSION_SECRET,
@@ -139,7 +132,7 @@ app.use(session({
 
     cookie: {
         httpOnly: true,
-        secure: false,
+        secure: ES_PRODUCCION,
         sameSite: "strict",
         maxAge: 8 * 60 * 60 * 1000
     }
